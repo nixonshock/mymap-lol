@@ -1,69 +1,107 @@
-import Image from "next/image";
+"use client";
+
+import { useState, useSyncExternalStore, useMemo } from "react";
+import MalaysiaMap from "@/components/MalaysiaMap";
+import ClaimPanel from "@/components/ClaimPanel";
+import StateChips from "@/components/StateChips";
+import HowItWorks from "@/components/HowItWorks";
+import { subscribe, getVersion, globalStats } from "@/lib/store";
+import { money, PRICING } from "@/lib/states";
 
 export default function Home() {
+  const version = useSyncExternalStore(subscribe, getVersion, getVersion);
+  const [selected, setSelected] = useState<string | null>(null);
+  const stats = useMemo(() => globalStats(), [version]);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen">
+      {/* header */}
+      <header className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500 text-[15px] font-black text-zinc-950">
+            MY
+          </span>
+          <div className="leading-tight">
+            <div className="text-[17px] font-bold tracking-tight text-zinc-50">mymap.lol</div>
+            <div className="text-[11px] text-zinc-500">own the Malaysia map</div>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
+        <div className="flex items-center gap-2">
+          <HowItWorks />
           <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="#map"
+            className="rounded-lg bg-emerald-500 px-3.5 py-1.5 text-[13px] font-semibold text-zinc-950 transition hover:bg-emerald-400"
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
+            Claim a state
           </a>
         </div>
-      </main>
+      </header>
+
+      {/* stats strip */}
+      <section className="mx-auto max-w-6xl px-5">
+        <div className="grid grid-cols-3 gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+          <Stat label="Total staked" value={money(stats.totalStaked)} accent />
+          <Stat label="States claimed" value={`${stats.statesClaimed}/${stats.statesTotal}`} />
+          <Stat label="Claims" value={String(stats.totalClaims)} />
+        </div>
+      </section>
+
+      {/* hero line */}
+      <section className="mx-auto max-w-6xl px-5 pt-8">
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-50 sm:text-3xl">
+          Every state is an open leaderboard.
+        </h1>
+        <p className="mt-1.5 max-w-2xl text-[15px] leading-relaxed text-zinc-400">
+          Stake your organization on any of Malaysia&apos;s states. Your rank is your total stake —
+          top up to take the top spot. Claim from {money(PRICING.minClaim)}.
+        </p>
+      </section>
+
+      {/* chips */}
+      <section id="map" className="mx-auto max-w-6xl scroll-mt-24 px-5 pt-5">
+        <StateChips selected={selected} onSelect={setSelected} />
+      </section>
+
+      {/* map + panel */}
+      <section className="mx-auto max-w-6xl px-5 pb-16 pt-3">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
+          <div className="map-stage flex items-center justify-center rounded-2xl border border-zinc-800 p-4">
+            <MalaysiaMap selectedCode={selected} onSelect={setSelected} />
+          </div>
+          <div className="min-h-[520px]">
+            {selected ? (
+              <ClaimPanel code={selected} />
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/40 p-8 text-center">
+                <div className="text-3xl">🗺️</div>
+                <h2 className="mt-3 text-lg font-semibold text-zinc-100">Pick a state</h2>
+                <p className="mt-1.5 max-w-xs text-[13px] leading-relaxed text-zinc-500">
+                  Click a state on the map or a chip above to see its leaderboard and claim it.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* footer */}
+      <footer className="border-t border-zinc-800/70 py-6">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-5 text-[12px] text-zinc-600 sm:flex-row">
+          <span>mymap.lol — own the Malaysia map</span>
+          <span>Map data: Malaysia administrative boundaries · It&apos;s an ad buy, not a bet</span>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className="text-center sm:text-left">
+      <div className="text-[11px] uppercase tracking-wider text-zinc-500">{label}</div>
+      <div className={`text-xl font-bold sm:text-2xl ${accent ? "text-emerald-400" : "text-zinc-100"}`}>
+        {value}
+      </div>
     </div>
   );
 }
