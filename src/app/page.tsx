@@ -65,7 +65,7 @@ export default function Home() {
       {/* map + panel */}
       <section className="mx-auto max-w-6xl px-5 pb-16 pt-3">
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
-          <div className="map-stage flex items-center justify-center rounded-2xl border border-zinc-800 p-4">
+          <div className="map-stage relative h-[440px] overflow-hidden rounded-2xl border border-zinc-800 sm:h-[560px]">
             <MalaysiaMap selectedCode={selected} onSelect={setSelected} />
           </div>
           <div className="min-h-[520px]">
