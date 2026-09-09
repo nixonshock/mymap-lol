@@ -1,12 +1,21 @@
+@import url("https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap");
 @import "tailwindcss";
 
 :root {
-  --bg: #08090c;
-  --fg: #e7eaee;
+  --bg: #eaf2fa;
+  --fg: #1f2b3e;
+  --muted: #8494ab;
+  --card: #ffffff;
+  --accent: #ffc93c; /* primary CTA yellow */
+  --accent-ink: #4a3400;
+  --chip: #f2f7fc; /* light blue chip */
+  --gold: #b8860b;
+  --brown: #3a2418;
+  --terracotta: #c76a3a;
 }
 
 html {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
@@ -14,6 +23,7 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family:
+    Nunito,
     ui-sans-serif,
     system-ui,
     -apple-system,
@@ -25,19 +35,27 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Subtle radial glow behind the map */
+/* Fredoka for display/headings + buttons, like the reference */
+.font-display {
+  font-family: Fredoka, ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Full-bleed ocean/backdrop behind the Malaysia map */
 .map-stage {
+  position: relative;
+  height: 100dvh;
+  overflow: hidden;
   background:
-    radial-gradient(1200px 600px at 50% 18%, rgba(20, 92, 70, 0.22), rgba(8, 9, 12, 0)) ,
-    #08090c;
+    radial-gradient(1200px 700px at 50% 28%, #dff0fb, rgba(223, 240, 251, 0)),
+    linear-gradient(180deg, #dcecf9 0%, #eaf2fa 60%, #eef6fd 100%);
 }
 
 ::selection {
-  background: rgba(16, 185, 129, 0.3);
+  background: rgba(255, 201, 60, 0.35);
 }
 
-/* minimal scrollbars */
+/* subtle scrollbars (kept light) */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #27272a transparent;
+  scrollbar-color: #c6d4e4 transparent;
 }

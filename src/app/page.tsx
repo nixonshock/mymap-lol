@@ -1,107 +1,74 @@
 "use client";
 
-import { useState, useSyncExternalStore, useMemo } from "react";
+import { useState } from "react";
 import MalaysiaMap from "@/components/MalaysiaMap";
-import ClaimPanel from "@/components/ClaimPanel";
-import StateChips from "@/components/StateChips";
-import HowItWorks from "@/components/HowItWorks";
-import { subscribe, getVersion, globalStats } from "@/lib/store";
-import { money, PRICING } from "@/lib/states";
+import Header from "@/components/Header";
+import StatsBar from "@/components/StatsBar";
+import WorldOrder from "@/components/WorldOrder";
+import LiveActivity from "@/components/LiveActivity";
+import StakeModal from "@/components/StakeModal";
+import { BoardModal, InfoModal, SearchModal } from "@/components/Modals";
 
 export default function Home() {
-  const version = useSyncExternalStore(subscribe, getVersion, getVersion);
-  const [selected, setSelected] = useState<string | null>(null);
-  const stats = useMemo(() => globalStats(), [version]);
+  const [stakeCode, setStakeCode] = useState<string | null>(null);
+  const [modal, setModal] = useState<"info" | "board" | "search" | null>(null);
+  const [mobileOrder, setMobileOrder] = useState(false);
 
   return (
-    <div className="min-h-screen">
-      {/* header */}
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
-        <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500 text-[15px] font-black text-zinc-950">
-            MY
-          </span>
-          <div className="leading-tight">
-            <div className="text-[17px] font-bold tracking-tight text-zinc-50">mymap.lol</div>
-            <div className="text-[11px] text-zinc-500">own the Malaysia map</div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <HowItWorks />
-          <a
-            href="#map"
-            className="rounded-lg bg-emerald-500 px-3.5 py-1.5 text-[13px] font-semibold text-zinc-950 transition hover:bg-emerald-400"
-          >
-            Claim a state
-          </a>
-        </div>
-      </header>
-
-      {/* stats strip */}
-      <section className="mx-auto max-w-6xl px-5">
-        <div className="grid grid-cols-3 gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
-          <Stat label="Total staked" value={money(stats.totalStaked)} accent />
-          <Stat label="States claimed" value={`${stats.statesClaimed}/${stats.statesTotal}`} />
-          <Stat label="Claims" value={String(stats.totalClaims)} />
-        </div>
-      </section>
-
-      {/* hero line */}
-      <section className="mx-auto max-w-6xl px-5 pt-8">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-50 sm:text-3xl">
-          Every state is an open leaderboard.
-        </h1>
-        <p className="mt-1.5 max-w-2xl text-[15px] leading-relaxed text-zinc-400">
-          Stake your organization on any of Malaysia&apos;s states. Your rank is your total stake —
-          top up to take the top spot. Claim from {money(PRICING.minClaim)}.
-        </p>
-      </section>
-
-      {/* chips */}
-      <section id="map" className="mx-auto max-w-6xl scroll-mt-24 px-5 pt-5">
-        <StateChips selected={selected} onSelect={setSelected} />
-      </section>
-
-      {/* map + panel */}
-      <section className="mx-auto max-w-6xl px-5 pb-16 pt-3">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
-          <div className="map-stage relative h-[440px] overflow-hidden rounded-2xl border border-zinc-800 sm:h-[560px]">
-            <MalaysiaMap selectedCode={selected} onSelect={setSelected} />
-          </div>
-          <div className="min-h-[520px]">
-            {selected ? (
-              <ClaimPanel code={selected} />
-            ) : (
-              <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/40 p-8 text-center">
-                <div className="text-3xl">🗺️</div>
-                <h2 className="mt-3 text-lg font-semibold text-zinc-100">Pick a state</h2>
-                <p className="mt-1.5 max-w-xs text-[13px] leading-relaxed text-zinc-500">
-                  Click a state on the map or a chip above to see its leaderboard and claim it.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* footer */}
-      <footer className="border-t border-zinc-800/70 py-6">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-5 text-[12px] text-zinc-600 sm:flex-row">
-          <span>mymap.lol — own the Malaysia map</span>
-          <span>Map data: Malaysia administrative boundaries · It&apos;s an ad buy, not a bet</span>
-        </div>
-      </footer>
-    </div>
-  );
-}
-
-function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <div className="text-center sm:text-left">
-      <div className="text-[11px] uppercase tracking-wider text-zinc-500">{label}</div>
-      <div className={`text-xl font-bold sm:text-2xl ${accent ? "text-emerald-400" : "text-zinc-100"}`}>
-        {value}
+    <div className="map-stage">
+      {/* full-bleed Malaysia map */}
+      <div className="absolute inset-0">
+        <MalaysiaMap selectedCode={stakeCode} onSelect={(code) => setStakeCode(code)} />
       </div>
+
+      {/* overlay UI */}
+      <div className="pointer-events-none absolute inset-0">
+        {/* top-left brand + CTA + icons */}
+        <div className="absolute left-4 top-4">
+          <Header onOpen={setModal} onClaim={() => setModal("search")} />
+        </div>
+
+        {/* top-right stats */}
+        <div className="absolute right-4 top-4">
+          <StatsBar />
+        </div>
+
+        {/* right leaderboard panel (desktop) */}
+        <div className="absolute right-4 top-1/2 hidden h-[max(70dvh,480px)] w-[380px] -translate-y-1/2 lg:block">
+          <WorldOrder onPick={setStakeCode} />
+        </div>
+
+        {/* left live activity (desktop) */}
+        <div className="absolute left-4 top-[168px] hidden h-[300px] w-[300px] lg:block">
+          <LiveActivity onPick={setStakeCode} />
+        </div>
+
+        {/* mobile: open World Order */}
+        <button
+          type="button"
+          onClick={() => setMobileOrder(true)}
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white/95 px-4 py-2 text-[13px] font-bold text-[#1f2b3e] shadow-lg ring-1 ring-[#e5edf5] lg:hidden"
+        >
+          🇲🇾 World Order
+        </button>
+      </div>
+
+      {/* mobile World Order sheet */}
+      {mobileOrder && (
+        <div className="pointer-events-auto fixed inset-0 z-40 flex items-end justify-center bg-[rgba(30,45,70,0.4)] lg:hidden">
+          <div className="h-[86dvh] w-full max-w-md rounded-t-[22px] bg-white p-3 shadow-2xl">
+            <WorldOrder onPick={setStakeCode} onClose={() => setMobileOrder(false)} />
+          </div>
+        </div>
+      )}
+
+      {/* stakeholder / stake modal */}
+      {stakeCode && <StakeModal code={stakeCode} onClose={() => setStakeCode(null)} />}
+
+      {/* icon modals */}
+      {modal === "info" && <InfoModal onClose={() => setModal(null)} />}
+      {modal === "board" && <BoardModal onClose={() => setModal(null)} />}
+      {modal === "search" && <SearchModal onClose={() => setModal(null)} onPick={setStakeCode} />}
     </div>
   );
 }

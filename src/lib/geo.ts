@@ -131,9 +131,9 @@ function mix(a: number[], b: number[], t: number) {
   return `rgb(${c[0]},${c[1]},${c[2]})`;
 }
 
-const EMPTY_COLOR = [46, 52, 61];
-const OWNED_LOW = [30, 92, 66];
-const OWNED_HIGH = [72, 187, 120];
+const EMPTY_COLOR = [220, 227, 235];
+const OWNED_LOW = [214, 240, 224];
+const OWNED_HIGH = [117, 199, 153];
 
 /** Color a state by its total stake: empty = visible slate, claimed = green. */
 export function colorForTotal(total: number, maxTotal: number): string {

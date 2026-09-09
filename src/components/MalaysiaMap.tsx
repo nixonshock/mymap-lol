@@ -247,7 +247,7 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
 
   if (!geom) {
     return (
-      <div className="flex h-full w-full items-center justify-center text-sm text-zinc-500">
+      <div className="flex h-full w-full items-center justify-center text-sm text-[#8494ab]">
         Loading map…
       </div>
     );
@@ -296,8 +296,8 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
                 data-code={code}
                 d={d}
                 fill={colorForTotal(total, maxTotal)}
-                stroke={isSel || isHover ? "#ffffff" : "#1a2027"}
-                strokeWidth={isSel ? 1.8 : isHover ? 1.2 : 0.9}
+                stroke={isSel ? "#1f7a55" : isHover ? "#7aa0c8" : "#d3deea"}
+                strokeWidth={isSel ? 1.8 : isHover ? 1.3 : 1}
                 className="cursor-pointer transition-[fill] duration-150"
                 onMouseEnter={() => setHovered(code)}
                 onMouseLeave={() => setHovered((c) => (c === code ? null : c))}
@@ -317,9 +317,9 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
                   dominantBaseline="middle"
                   className="pointer-events-none select-none"
                   fontSize={size}
-                  fill="#c8ced6"
+                  fill="#64748b"
                   fontWeight={600}
-                  style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.65)", strokeWidth: 2 }}
+                  style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.85)", strokeWidth: 2.5 }}
                 >
                   {stateCodeToName(l.code)}
                 </text>
@@ -333,16 +333,16 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
             const dx = onRight ? r + 2 : -(r + 2);
             return (
               <g key={`city-${c.name}`} className="pointer-events-none select-none">
-                <circle cx={c.x} cy={c.y} r={r} fill="#fbbf24" stroke="#08090c" strokeWidth={0.8} opacity={0.95} />
+                <circle cx={c.x} cy={c.y} r={r} fill="#f2a13c" stroke="#ffffff" strokeWidth={0.9} opacity={0.97} />
                 <text
                   x={c.x + dx}
                   y={c.y}
                   textAnchor={onRight ? "start" : "end"}
                   dominantBaseline="middle"
                   fontSize={fs}
-                  fill="#e7eaee"
-                  fontWeight={500}
-                  style={{ paintOrder: "stroke", stroke: "rgba(0,0,0,0.6)", strokeWidth: 2 }}
+                  fill="#1f2b3e"
+                  fontWeight={600}
+                  style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.9)", strokeWidth: 2.5 }}
                 >
                   {c.name}
                 </text>
@@ -353,35 +353,35 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
       </svg>
 
       {/* interaction hint */}
-      <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-zinc-800 bg-zinc-950/80 px-3 py-1 text-[11px] text-zinc-400 shadow-lg">
+      <div className="pointer-events-none absolute bottom-3 left-3 rounded-full border border-[#dfe7f0] bg-white/90 px-3 py-1.5 text-[11px] font-bold text-[#5b6b7e] shadow-lg">
         drag to pan · scroll to zoom · click a state
       </div>
 
       {/* zoom controls */}
-      <div className="absolute bottom-3 right-3 flex flex-col overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/85 shadow-xl">
+      <div className="absolute bottom-3 right-3 flex flex-col overflow-hidden rounded-xl border border-[#dfe7f0] bg-white/95 shadow-xl">
         <button
           type="button"
           onClick={() => zoomCenter(ZOOM_STEP)}
           aria-label="Zoom in"
-          className="flex h-9 w-9 items-center justify-center text-lg text-zinc-300 transition hover:bg-zinc-800 hover:text-zinc-100"
+          className="flex h-9 w-9 items-center justify-center text-lg font-bold text-[#3a4a5e] transition hover:bg-[#f2f7fc]"
         >
           +
         </button>
-        <div className="h-px bg-zinc-800" />
+        <div className="h-px bg-[#eef3f9]" />
         <button
           type="button"
           onClick={() => zoomCenter(1 / ZOOM_STEP)}
           aria-label="Zoom out"
-          className="flex h-9 w-9 items-center justify-center text-lg text-zinc-300 transition hover:bg-zinc-800 hover:text-zinc-100"
+          className="flex h-9 w-9 items-center justify-center text-lg font-bold text-[#3a4a5e] transition hover:bg-[#f2f7fc]"
         >
           −
         </button>
-        <div className="h-px bg-zinc-800" />
+        <div className="h-px bg-[#eef3f9]" />
         <button
           type="button"
           onClick={reset}
           aria-label="Reset view"
-          className="flex h-9 w-9 items-center justify-center text-[13px] text-zinc-300 transition hover:bg-zinc-800 hover:text-zinc-100"
+          className="flex h-9 w-9 items-center justify-center text-[15px] text-[#3a4a5e] transition hover:bg-[#f2f7fc]"
         >
           ⤢
         </button>
@@ -417,16 +417,16 @@ function HoverTip({
   const left = Math.min(x + 14, typeof window !== "undefined" ? window.innerWidth - 220 : x);
   return (
     <div
-      className="pointer-events-none absolute z-20 -translate-y-1/2 rounded-lg border border-zinc-700 bg-zinc-950/95 px-3 py-2 text-[13px] shadow-xl"
+      className="pointer-events-none absolute z-20 -translate-y-1/2 rounded-lg border border-[#dfe7f0] bg-white px-3 py-2 text-[13px] shadow-xl"
       style={{ left, top: y }}
     >
-      <div className="font-semibold text-zinc-100">{name}</div>
-      <div className="mt-0.5 text-zinc-400">
+      <div className="font-bold text-[#1f2b3e]">{name}</div>
+      <div className="mt-0.5 font-semibold text-[#8494ab]">
         {isEmpty ? (
           "Open for claiming · from " + money(10)
         ) : (
           <>
-            <span className="text-emerald-400">{money(total)}</span> staked
+            <span className="text-[#1f7a55]">{money(total)}</span> staked
           </>
         )}
       </div>

@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { Claim, StateLeaderboard, HolderRow, StakeResult } from "./types";
-import { PRICING, stateCodeToName } from "./states";
+import { PRICING, STATES, stateCodeToName } from "./states";
 
 const KEY = "mymap:claims:v1";
 
@@ -115,4 +115,49 @@ export function applyPaidClaim(claim: Omit<Claim, "id" | "at" | "status">): Stak
   save(claims);
   emit();
   return { ok: true, message: "Stake applied.", stateCode: full.stateCode, leaderboard: stateLeaderboard(full.stateCode) };
+}
+
+// ---- worldmap.lol-style dashboard queries ----
+
+/** Most recent claimed/staked activities, newest first. */
+export function recentClaims(n = 8) {
+  return [...claims]
+    .sort((a, b) => b.at - a.at)
+    .slice(0, n)
+    .map((c) => ({
+      stateCode: c.stateCode,
+      stateName: stateCodeToName(c.stateCode),
+      orgName: c.orgName,
+      amount: c.amount,
+      at: c.at,
+    }));
+}
+
+/** Top states by total stake (the "World Order" list). */
+export function worldOrder(n = 10) {
+  return Object.entries(allTotals())
+    .map(([code, v]) => ({ code, name: stateCodeToName(code), ...v }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, n);
+}
+
+/** Number of states with no holder yet (still open). */
+export function openStateCount() {
+  const t = allTotals();
+  return STATES.filter((s) => !t[s.code]).length;
+}
+
+/** Top organizations aggregated across every state (the "board"). */
+export function globalTopOrgs(n = 10) {
+  const byOrg = new Map<string, { total: number; states: Set<string> }>();
+  for (const c of claims) {
+    const cur = byOrg.get(c.orgName) ?? { total: 0, states: new Set<string>() };
+    cur.total += c.amount;
+    cur.states.add(c.stateCode);
+    byOrg.set(c.orgName, cur);
+  }
+  return [...byOrg.entries()]
+    .map(([orgName, v]) => ({ orgName, total: v.total, states: v.states.size }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, n);
 }
