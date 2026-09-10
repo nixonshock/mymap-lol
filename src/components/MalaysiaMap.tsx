@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { FeatureCollection } from "geojson";
 import { buildMapGeom, colorForTotal, type MapFeature } from "@/lib/geo";
 import { useSyncExternalStore } from "react";
-import { subscribe, getVersion, allTotals, stateLeaderboard } from "@/lib/store";
+import { subscribe, getVersion, allTotals, stateLeaderboard, topHolder } from "@/lib/store";
 import { PRICING, money, moneyBoth, stateCodeToName } from "@/lib/states";
+import { linkLabel, safeHref } from "@/lib/links";
 import { CITIES } from "@/lib/cities";
 
 interface Props {
@@ -26,6 +27,16 @@ interface Tf {
 const MIN_K = 1;
 const MAX_K = 12;
 const ZOOM_STEP = 1.35;
+
+/**
+ * The href of the nearest ancestor element carrying data-href (the owner label
+ * on a claimed state), or null when the hit-test landed on the map itself.
+ */
+function hrefFrom(target: EventTarget | null): string | null {
+  const el = target as Element | null;
+  if (!el || typeof el.closest !== "function") return null;
+  return el.closest("[data-href]")?.getAttribute("data-href") ?? null;
+}
 
 export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
   const version = useSyncExternalStore(subscribe, getVersion, getVersion);
@@ -56,6 +67,7 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
   } | null>(null);
   const movedRef = useRef(false);
   const downCodeRef = useRef<string | null>(null);
+  const downHrefRef = useRef<string | null>(null);
 
   const totals = useMemo(() => allTotals(), [version]);
   const maxTotal = useMemo(
@@ -144,6 +156,7 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const code = (e.target as Element | null)?.getAttribute?.("data-code") ?? null;
     downCodeRef.current = code;
+    downHrefRef.current = hrefFrom(e.target);
 
     if (pointers.current.size === 1) {
       const { k, x, y } = tfRef.current;
@@ -195,12 +208,15 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
   }
 
   function onPointerUp(e: React.PointerEvent<SVGSVGElement>) {
-    // If this was a clean tap on a state (no drag/pinch), select it.
+    // If this was a clean tap on a state (no drag/pinch), select it — or, when
+    // the tap landed on a claimed state's owner label, follow that org's link.
     const wasTap = !movedRef.current;
     const code = downCodeRef.current;
+    const href = downHrefRef.current;
     const isSingle = pointers.current.size === 1;
 
     pointers.current.delete(e.pointerId);
+    if (wasTap) downHrefRef.current = null;
 
     if (pointers.current.size === 0) {
       setDragging(false);
@@ -215,6 +231,10 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
       movedRef.current = true;
     }
 
+    if (wasTap && isSingle && href) {
+      window.open(href, "_blank", "noopener,noreferrer");
+      return;
+    }
     if (wasTap && isSingle && code) onSelect(code);
   }
 
@@ -303,24 +323,61 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
             );
           })}
           {geom.layout
-            .filter((l) => l.area >= 200)
+            .filter((l) => l.area >= 200 || (totals[l.code]?.total ?? 0) > 0)
             .map((l) => {
+              const total = totals[l.code]?.total ?? 0;
               const size = Math.max(8.5, Math.min(16, Math.round(Math.sqrt(l.area) / 9)));
+              // Claimed states also carry their current owner: the org name sits
+              // under the state name and is itself the outbound link.
+              const owner = total > 0 ? topHolder(l.code) : null;
+              const href = safeHref(owner?.link);
+              const ownerSize = Math.max(8, Math.min(15, size * 0.92));
               return (
-                <text
-                  key={`l-${l.code}`}
-                  x={l.centroid[0]}
-                  y={l.centroid[1]}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  className="pointer-events-none select-none"
-                  fontSize={size}
-                  fill="#64748b"
-                  fontWeight={600}
-                  style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.85)", strokeWidth: 2.5 }}
-                >
-                  {stateCodeToName(l.code)}
-                </text>
+                <g key={`l-${l.code}`}>
+                  <text
+                    x={l.centroid[0]}
+                    y={owner ? l.centroid[1] - size * 0.62 : l.centroid[1]}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    className="pointer-events-none select-none"
+                    fontSize={size}
+                    fill="#64748b"
+                    fontWeight={600}
+                    style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.85)", strokeWidth: 2.5 }}
+                  >
+                    {stateCodeToName(l.code)}
+                  </text>
+                  {owner && (
+                    <a
+                      href={href ?? undefined}
+                      data-href={href ?? undefined}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={href ? `${owner.orgName} — ${href}` : owner.orgName}
+                      aria-label={href ? `${owner.orgName}: open ${href}` : undefined}
+                      className={href ? "cursor-pointer" : undefined}
+                    >
+                      <text
+                        x={l.centroid[0]}
+                        y={l.centroid[1] + size * 0.68}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        className="select-none"
+                        fontSize={ownerSize}
+                        fill="#166d4a"
+                        fontWeight={800}
+                        style={{
+                          paintOrder: "stroke",
+                          stroke: "rgba(255,255,255,0.92)",
+                          strokeWidth: 2.6,
+                          textDecoration: href ? "underline" : "none",
+                        }}
+                      >
+                        {owner.orgName}
+                      </text>
+                    </a>
+                  )}
+                </g>
               );
             })}
           {/* city markers — the names live in the Cities list panel, so the map
@@ -387,6 +444,7 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
           name={stateLeaderboard(hovered).name}
           total={totals[hovered]?.total ?? 0}
           isEmpty={!totals[hovered]}
+          owner={totals[hovered] ? topHolder(hovered) : null}
         />
       )}
     </div>
@@ -399,20 +457,32 @@ function HoverTip({
   name,
   total,
   isEmpty,
+  owner,
 }: {
   x: number;
   y: number;
   name: string;
   total: number;
   isEmpty: boolean;
+  owner: { orgName: string; pitch: string; link?: string } | null;
 }) {
   const left = Math.min(x + 14, typeof window !== "undefined" ? window.innerWidth - 220 : x);
+  const site = linkLabel(owner?.link);
   return (
     <div
       className="pointer-events-none absolute z-20 -translate-y-1/2 rounded-lg border border-[#dfe7f0] bg-white px-3 py-2 text-[13px] shadow-xl"
       style={{ left, top: y }}
     >
       <div className="font-bold text-[#1f2b3e]">{name}</div>
+      {owner && (
+        <div className="mt-0.5 font-extrabold text-[#166d4a]">
+          {owner.orgName}
+          {site && <span className="font-semibold text-[#8494ab]"> · {site}</span>}
+        </div>
+      )}
+      {owner?.pitch && (
+        <div className="mt-0.5 max-w-[240px] truncate font-semibold text-[#8494ab]">{owner.pitch}</div>
+      )}
       <div className="mt-0.5 font-semibold text-[#8494ab]">
         {isEmpty ? (
           "Open for claiming · from " + moneyBoth(PRICING.minClaim)

@@ -83,7 +83,13 @@ export default function WorldOrder({ onPick, onClose }: Props) {
                     {s.name}
                     {top && <span aria-label="top state">👑</span>}
                   </div>
-                  <div className="text-[11px] font-semibold text-[#8494ab]">
+                  <div className="truncate text-[11px] font-semibold text-[#8494ab]">
+                    {s.leader ? (
+                      <>
+                        <span className="font-extrabold text-[#1f7a55]">{s.leader}</span>
+                        <span className="text-[#b0bed0]"> · </span>
+                      </>
+                    ) : null}
                     {s.count} claim{s.count === 1 ? "" : "s"}
                   </div>
                 </div>

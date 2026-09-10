@@ -1,6 +1,6 @@
 import type { Claim, HolderRow, StateLeaderboard, StakeResult } from "./types";
 import { PRICING, STATES, stateCodeToName } from "./states";
-import { emptySnapshot, fetchBoard, type BoardSnapshot, type BoardState } from "./board";
+import { emptySnapshot, fetchBoard, type BoardHolder, type BoardSnapshot, type BoardState } from "./board";
 
 /**
  * Board store.
@@ -130,6 +130,12 @@ export function getVersion() {
 
 export const isLive = () => snapshot.mode === "live";
 
+/** The #1 holder on a state — the org the map credits for owning it. */
+export function topHolder(code: string): BoardHolder | null {
+  const state = snapshot.states.find((s) => s.code === code);
+  return state?.holders?.[0] ?? null;
+}
+
 // ---------------------------------------------------------------- server sync
 async function refreshBoard(): Promise<void> {
   if (inFlight) return;
@@ -204,9 +210,19 @@ export function recentClaims(n = 8) {
   return snapshot.activity.slice(0, n);
 }
 
+/** Leaderboard of states by total stake, each carrying its current top holder. */
 export function worldOrder(n = 10) {
   return Object.entries(allTotals())
-    .map(([code, v]) => ({ code, name: stateCodeToName(code), ...v }))
+    .map(([code, v]) => {
+      const leader = topHolder(code);
+      return {
+        code,
+        name: stateCodeToName(code),
+        ...v,
+        leader: leader?.orgName ?? "",
+        leaderLink: leader?.link,
+      };
+    })
     .sort((a, b) => b.total - a.total)
     .slice(0, n);
 }

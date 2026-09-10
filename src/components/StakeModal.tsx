@@ -9,6 +9,7 @@ import {
   applyPaidClaim,
 } from "@/lib/store";
 import { checkout } from "@/lib/checkout";
+import { linkLabel, safeHref } from "@/lib/links";
 import { PRICING, money, moneyBoth, moneyMyr } from "@/lib/states";
 import type { StateLeaderboard } from "@/lib/types";
 
@@ -136,10 +137,28 @@ export default function StakeModal({ code, onClose }: { code: string; onClose: (
                     </span>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1 truncate text-[13px] font-bold text-[#1f2b3e]">
-                        {h.orgName}
+                        {(() => {
+                          const href = safeHref(h.link);
+                          return href ? (
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              title={href}
+                              className="truncate text-[#166d4a] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
+                            >
+                              {h.orgName}
+                            </a>
+                          ) : (
+                            <span className="truncate">{h.orgName}</span>
+                          );
+                        })()}
                         {i === 0 && <span aria-label="top holder">👑</span>}
                       </div>
-                      {h.pitch && <div className="truncate text-[11px] font-semibold text-[#8494ab]">{h.pitch}</div>}
+                      <div className="truncate text-[11px] font-semibold text-[#8494ab]">
+                        {[h.pitch, linkLabel(h.link)].filter(Boolean).join(" · ")}
+                      </div>
                     </div>
                   </div>
                   <div className="shrink-0 text-[13px] font-extrabold tabular-nums text-[#1f7a55]">
