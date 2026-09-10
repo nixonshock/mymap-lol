@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import MalaysiaMap from "@/components/MalaysiaMap";
 import Header from "@/components/Header";
-import StatsBar from "@/components/StatsBar";
 import WorldOrder from "@/components/WorldOrder";
 import LiveActivity from "@/components/LiveActivity";
 import CitiesPanel from "@/components/CitiesPanel";
@@ -51,9 +50,6 @@ export default function Home() {
 
         {/* right rail */}
         <div className="absolute right-4 top-4 flex w-[calc(100%-2rem)] flex-col items-end gap-3 xl:bottom-3 xl:right-3 xl:top-3 xl:w-[288px]">
-          <div className="rounded-full bg-white/95 px-4 py-2 shadow-lg ring-1 ring-[#e5edf5]">
-            <StatsBar />
-          </div>
           <div className="hidden min-h-0 w-full flex-1 xl:flex">
             <CitiesPanel onPick={setTarget} />
           </div>
