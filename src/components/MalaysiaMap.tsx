@@ -252,7 +252,6 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
   }
 
   const features = ((geojson as FeatureCollection).features ?? []) as unknown as FeatureWithProps[];
-  const vbW = Number(geom.viewBox.split(/\s+/)[2]) || 1;
 
   return (
     <div
@@ -324,28 +323,22 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
                 </text>
               );
             })}
-          {/* famous cities */}
+          {/* city markers — the names live in the Cities list panel, so the map
+              keeps only the orange pins (nothing gets clipped or hidden). */}
           {projectedCities.map((c) => {
-            const r = 2.4 / Math.max(1, Math.sqrt(tf.k));
-            const fs = (c.major ? 11 : 9.5) / Math.max(1, Math.pow(tf.k, 0.55));
-            const onRight = c.x < vbW * 0.62;
-            const dx = onRight ? r + 2 : -(r + 2);
+            const r = 2.6 / Math.max(1, Math.sqrt(tf.k));
             return (
-              <g key={`city-${c.name}`} className="pointer-events-none select-none">
-                <circle cx={c.x} cy={c.y} r={r} fill="#f2a13c" stroke="#ffffff" strokeWidth={0.9} opacity={0.97} />
-                <text
-                  x={c.x + dx}
-                  y={c.y}
-                  textAnchor={onRight ? "start" : "end"}
-                  dominantBaseline="middle"
-                  fontSize={fs}
-                  fill="#1f2b3e"
-                  fontWeight={600}
-                  style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.9)", strokeWidth: 2.5 }}
-                >
-                  {c.name}
-                </text>
-              </g>
+              <circle
+                key={`city-${c.name}`}
+                cx={c.x}
+                cy={c.y}
+                r={r}
+                fill="#f2a13c"
+                stroke="#ffffff"
+                strokeWidth={1.1 / Math.max(1, Math.pow(tf.k, 0.5))}
+                opacity={0.97}
+                className="pointer-events-none"
+              />
             );
           })}
         </g>
