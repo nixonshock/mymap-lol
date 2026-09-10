@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { subscribe, getVersion, worldOrder, openStateCount } from "@/lib/store";
 import { money } from "@/lib/states";
 
@@ -13,9 +13,20 @@ export default function WorldOrder({ onPick, onClose }: Props) {
   const version = useSyncExternalStore(subscribe, getVersion, getVersion);
   const list = useMemo(() => worldOrder(10), [version]);
   const open = useMemo(() => openStateCount(), [version]);
+  const [expanded, setExpanded] = useState(false);
 
-  return (
-    <div className="pointer-events-auto flex h-full flex-col rounded-[22px] bg-white shadow-[0_18px_50px_-18px_rgba(31,43,62,0.35)] ring-1 ring-[#e5edf5]">
+  // Escape collapses the expanded board.
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setExpanded(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [expanded]);
+
+  const body = (
+    <>
       {/* header */}
       <div className="flex items-start justify-between px-6 pt-5">
         <div>
@@ -29,12 +40,14 @@ export default function WorldOrder({ onPick, onClose }: Props) {
         <div className="flex items-center gap-1">
           <button
             type="button"
-            aria-label="Expand"
+            aria-label={expanded ? "Collapse" : "Expand"}
+            aria-expanded={expanded}
+            onClick={() => setExpanded((v) => !v)}
             className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f2f7fc] text-[14px] font-bold text-[#3a4a5e] ring-1 ring-[#e5edf5] transition hover:bg-[#e6eef7]"
           >
-            ⤢
+            {expanded ? "⤡" : "⤢"}
           </button>
-          {onClose && (
+          {onClose && !expanded && (
             <button
               type="button"
               aria-label="Close"
@@ -63,7 +76,10 @@ export default function WorldOrder({ onPick, onClose }: Props) {
               <button
                 key={s.code}
                 type="button"
-                onClick={() => onPick(s.code)}
+                onClick={() => {
+                  setExpanded(false);
+                  onPick(s.code);
+                }}
                 className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition ${
                   top ? "bg-[#fff7e0] ring-1 ring-[#ffe3a1]" : "bg-[#f2f7fc] hover:bg-[#e9f1f9]"
                 }`}
@@ -103,6 +119,31 @@ export default function WorldOrder({ onPick, onClose }: Props) {
       <div className="border-t border-[#eef3f9] px-6 py-3 text-center text-[11px] font-semibold text-[#8494ab]">
         total staked across every state · click one to stake
       </div>
-    </div>
+    </>
+  );
+
+  return (
+    <>
+      <div className="pointer-events-auto flex h-full flex-col rounded-[22px] bg-white shadow-[0_18px_50px_-18px_rgba(31,43,62,0.35)] ring-1 ring-[#e5edf5]">
+        {body}
+      </div>
+
+      {/* expanded board — the ⤢ button blows the panel up to a full view.
+          Bottom sheet on phones, centred card from sm up (same shell as the
+          info / board / search modals). Backdrop or Escape collapses it. */}
+      {expanded && (
+        <div
+          className="pointer-events-auto fixed inset-0 z-50 flex items-end justify-center bg-[rgba(30,45,70,0.4)] p-0 sm:items-center sm:p-4"
+          onClick={() => setExpanded(false)}
+        >
+          <div
+            className="flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-t-[26px] bg-white shadow-2xl sm:rounded-[26px]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {body}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
