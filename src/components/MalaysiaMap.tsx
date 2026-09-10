@@ -364,12 +364,12 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
                         dominantBaseline="middle"
                         className="select-none"
                         fontSize={ownerSize}
-                        fill="#166d4a"
+                        fill="#0f5f40"
                         fontWeight={800}
                         style={{
                           paintOrder: "stroke",
-                          stroke: "rgba(255,255,255,0.92)",
-                          strokeWidth: 2.6,
+                          stroke: "rgba(255,255,255,0.9)",
+                          strokeWidth: 1.5,
                           textDecoration: href ? "underline" : "none",
                         }}
                       >
