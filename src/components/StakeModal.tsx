@@ -16,7 +16,15 @@ import type { StateLeaderboard, StakeTarget } from "@/lib/types";
 
 const EMPTY_FORM = { orgName: "", pitch: "", link: "", email: "" };
 
-export default function StakeModal({ target, onClose }: { target: StakeTarget; onClose: () => void }) {
+export default function StakeModal({
+  target,
+  onClose,
+  onOpenRules,
+}: {
+  target: StakeTarget;
+  onClose: () => void;
+  onOpenRules?: () => void;
+}) {
   const version = useSyncExternalStore(subscribe, getVersion, getVersion);
   const isCity = target.kind === "city";
   // Narrowed once here so the JSX below can use it without re-checking the union.
@@ -31,6 +39,7 @@ export default function StakeModal({ target, onClose }: { target: StakeTarget; o
   const [form, setForm] = useState(EMPTY_FORM);
   const [amount, setAmount] = useState<number>(0);
   const [busy, setBusy] = useState(false);
+  const [opening, setOpening] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   const orgTotal = useMemo(
@@ -59,6 +68,20 @@ export default function StakeModal({ target, onClose }: { target: StakeTarget; o
         link: form.link.trim() || undefined,
         amount,
       };
+
+      // LIVE: the stake is parked as pending and Whop's hosted checkout takes
+      // over from here (worldmap.lol's flow) — "Opening secure checkout…".
+      if (process.env.NEXT_PUBLIC_PAYMENT_MODE === "live") {
+        const applied = await applyPaidClaim(payload, { email: form.email.trim() || undefined });
+        if (applied.checkoutUrl) {
+          setOpening(true);
+          window.location.assign(applied.checkoutUrl);
+          return;
+        }
+        setResult({ ok: applied.ok, message: applied.message });
+        return;
+      }
+
       const pay = await checkout(payload);
       if (pay.status === "paid") {
         const applied = await applyPaidClaim(payload, { email: form.email.trim() || undefined });
@@ -105,6 +128,10 @@ export default function StakeModal({ target, onClose }: { target: StakeTarget; o
               />
               {lb.isEmpty ? "Open for claiming" : `${money(lb.totalStake)} staked`} · from {moneyBoth(PRICING.minClaim)}
             </div>
+            <p className="mt-2 max-w-[46ch] text-[12.5px] font-semibold leading-relaxed text-[#8494ab]">
+              Your rank is your total stake on this {isCity ? "city" : "state"}. Top up anytime —
+              reclaiming #1 only costs the difference, your past stake still counts.
+            </p>
             {cityTarget && (
               <div className="mt-1 text-[11.5px] font-semibold text-[#8494ab]">
                 City stakes stay on {cityTarget.name} — {stateCodeToName(cityTarget.stateCode)} itself is not
@@ -222,16 +249,17 @@ export default function StakeModal({ target, onClose }: { target: StakeTarget; o
             </div>
           </div>
 
-          <p className="mt-3 text-[12px] font-semibold leading-relaxed text-[#8494ab]">
+          <p className="mt-3 text-[12.5px] font-bold leading-relaxed text-[#1f2b3e]">
             {isTopForMe ? (
-              <>You hold the top spot with {money(orgTotal)}. Add more to grow your lead.</>
+              <>
+                👑 You hold #1 in {lb.name} with {money(orgTotal)}. Add more to grow your lead.
+              </>
             ) : lb.isEmpty ? (
-              <>Claim from {moneyBoth(PRICING.minClaim)}. Your rank = your total stake.</>
+              <>👑 {moneyBoth(PRICING.minClaim)} claims {lb.name} outright — first mover holds #1.</>
             ) : (
               <>
-                Current #1 is at {money(lb.holders[0].total)}. Stake{" "}
-                <span className="text-[#1f2b3e]">{money(suggested)}</span>{" "}
-                <span className="text-[#8494ab]">({moneyMyr(suggested)})</span> to take the top spot.
+                👑 {money(suggested)} takes #1 in {lb.name}!{" "}
+                <span className="font-semibold text-[#8494ab]">({moneyMyr(suggested)})</span>
               </>
             )}
           </p>
@@ -252,12 +280,14 @@ export default function StakeModal({ target, onClose }: { target: StakeTarget; o
           <button
             type="button"
             onClick={submit}
-            disabled={busy || isInvalid}
+            disabled={busy || opening || isInvalid}
             className="font-display w-full rounded-2xl bg-[#ffc93c] py-3 text-center text-[15px] font-semibold text-[#4a3400] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {busy
-              ? "Processing…"
-              : `${lb.isEmpty ? "Claim" : "Stake"} ${lb.name} — ${moneyBoth(amount || suggested)}`}
+            {opening
+              ? "Opening secure checkout…"
+              : busy
+                ? "Processing…"
+                : `${lb.isEmpty ? "Claim" : "Stake"} ${lb.name} — ${moneyBoth(amount || suggested)}`}
           </button>
           <button
             type="button"
@@ -266,11 +296,23 @@ export default function StakeModal({ target, onClose }: { target: StakeTarget; o
           >
             maybe later
           </button>
-          <p className="mt-1 text-center text-[10px] font-semibold text-[#b0bed0]">
-            {process.env.NEXT_PUBLIC_PAYMENT_MODE === "live"
-              ? "Secure payment · it's an ad buy, not a bet"
-              : "Demo mode — no real payment is taken"}
-          </p>
+          {process.env.NEXT_PUBLIC_PAYMENT_MODE === "live" ? (
+            <p className="mt-2 text-center text-[10.5px] font-semibold leading-relaxed text-[#b0bed0]">
+              🔒 Secure payment via Whop · it&apos;s an ad buy, not a bet · by continuing you agree to
+              the{" "}
+              <button
+                type="button"
+                onClick={onOpenRules}
+                className="underline decoration-dotted underline-offset-2 transition hover:text-[#8494ab]"
+              >
+                rules &amp; terms
+              </button>
+            </p>
+          ) : (
+            <p className="mt-1 text-center text-[10px] font-semibold text-[#b0bed0]">
+              Demo mode — no real payment is taken
+            </p>
+          )}
         </div>
       </div>
     </div>

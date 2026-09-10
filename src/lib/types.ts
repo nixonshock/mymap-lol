@@ -52,6 +52,10 @@ export interface StakeResult {
   message: string;
   stateCode?: string;
   leaderboard?: StateLeaderboard;
+  /** Live payments: where to send the buyer (Whop's hosted checkout). */
+  checkoutUrl?: string;
+  /** Live payments: true while the stake is recorded but not yet paid. */
+  pending?: boolean;
 }
 
 // Payment abstraction. In DEMO mode we simulate a successful checkout;

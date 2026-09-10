@@ -53,22 +53,37 @@ npm run dev        # http://localhost:3000
 
 ## Going live
 
-### 1. Real payments
+### 1. Real payments — Whop (worldmap.lol's flow)
 
-The checkout is abstracted in `src/lib/checkout.ts`. In demo mode it simulates a
-successful payment. To charge real money:
+The stake modal hands the buyer to Whop's hosted checkout ("Opening secure
+checkout…"): the server parks the stake as `pending`, creates a one-time Whop
+plan for exactly that amount, and the buyer pays on Whop's page. Whop is the
+merchant of record (cards, Apple/Google Pay, GrabPay, crypto), and its webhook
+is what flips the claim to `paid`.
 
 ```bash
-# .env.local
+# .env.local  (never commit real values)
 NEXT_PUBLIC_PAYMENT_MODE=live
-NEXT_PUBLIC_PAYMENT_PROVIDER=whop | lnbits | stripe
-# provider env vars (e.g. LNbits URL + admin key, Whop API key, Stripe keys)
+WHOP_API_KEY=            # Dashboard > Settings > API keys (account key)
+WHOP_COMPANY_ID=biz_     # the account the money lands in
+WHOP_PRODUCT_ID=prod_    # the product the per-stake plans hang off
+WHOP_CURRENCY=myr        # base currency of the plan (usd = worldmap's own setup)
+WHOP_USD_MYR=4.04        # rate used to turn the site's $ figures into MYR charges
+WHOP_ADAPTIVE_PRICING=false  # true → Whop shows the buyer's local currency
+WHOP_WEBHOOK_SECRET=ws_  # verifies inbound webhooks (Standard Webhooks HMAC)
+WHOP_SANDBOX=true        # optional: hit sandbox-api.whop.com while testing
+WHOP_SUPPORT_EMAIL=      # optional: shown on the checkout ("contact … first")
 ```
 
-Wire the provider call in `src/lib/checkout.ts` -> `providerCheckout()` (or add
-`src/lib/payments/<provider>.ts`), and add the payment webhook that credits the
-claim on confirmation. **Never commit real keys** — they come from the
-environment / Vercel project settings.
+Point a Whop webhook at `https://www.mymap.lol/api/whop/webhook` for
+`payment.succeeded` (+ `payment.failed`), and paste its signing secret into
+`WHOP_WEBHOOK_SECRET`. Verification lives in `src/lib/payments/whop.ts`
+(`verifyWhopWebhook`): HMAC-SHA256 over `{webhook-id}.{webhook-timestamp}.{body}`,
+base64, 5-minute tolerance. The claim is matched by the `claim_id` metadata
+stamped on the plan (falling back to the plan id stored on the pending row).
+
+Demo mode (`NEXT_PUBLIC_PAYMENT_MODE` unset) still simulates the payment so the
+whole funnel works without any keys.
 
 ### 2. Shared, multi-user leaderboard (Supabase) — Phase 1, DONE in code
 

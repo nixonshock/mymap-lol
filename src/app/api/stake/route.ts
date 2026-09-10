@@ -1,7 +1,13 @@
 import { createHash, randomBytes } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { serviceClient } from "@/lib/server/supabase";
-import { PRICING } from "@/lib/states";
+import {
+  createWhopCheckout,
+  whopChargeAmount,
+  whopConfigured,
+  whopCurrency,
+} from "@/lib/payments/whop";
+import { PRICING, stateCodeToName } from "@/lib/states";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +18,33 @@ const json = (body: unknown, status = 200) =>
   NextResponse.json(body, { status, headers: { "cache-control": "no-store" } });
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
+
+/**
+ * The paragraph Whop shows on the hosted checkout page (worldmap.lol wording,
+ * adapted): say plainly what is being bought, that it is an ad buy and not a
+ * bet, and where to complain before disputing.
+ */
+function whopDescription({
+  orgName,
+  link,
+  targetLabel,
+}: {
+  orgName: string;
+  link: string | null;
+  targetLabel: string;
+}): string {
+  const support = process.env.WHOP_SUPPORT_EMAIL;
+  return [
+    `Advertising placement for ${link ?? orgName} on the ${targetLabel} board at mymap.lol.`,
+    "Rank is the bid; your listing holds its rank until someone outbids it.",
+    "This is an ad buy — no refunds, no payouts.",
+    "By completing this purchase you confirm you have reviewed the placement and pricing and authorize the payment.",
+    support ? `For any issue, contact ${support} before initiating a dispute or chargeback.` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 
 function clean(v: unknown, max: number): string {
   if (typeof v !== "string") return "";
@@ -128,22 +161,88 @@ export async function POST(req: NextRequest) {
   // --- payment path
   const paymentMode = process.env.NEXT_PUBLIC_PAYMENT_MODE ?? "demo";
   const editToken = randomBytes(18).toString("base64url");
+  const targetLabel = cityName
+    ? `${cityName} · ${stateCodeToName(stateCode)}`
+    : stateCodeToName(stateCode);
+
+  // The amount the buyer is actually charged, in the plan's currency. With
+  // WHOP_CURRENCY=myr the dollar figure the UI showed is converted at the same
+  // rate the UI quotes, so "$10" is charged as the RM40 the buyer was shown.
+  const chargeMajor = whopChargeAmount(amountUsd);
+  const currency = whopCurrency().toUpperCase();
+  const chargeCents = chargeMajor * 100;
 
   if (paymentMode === "live") {
-    // Phase 2 hook: create the provider invoice here, keep the claim pending,
-    // and let the provider webhook mark it paid. Until a provider is wired we
-    // refuse rather than pretend a payment happened.
-    const provider = process.env.NEXT_PUBLIC_PAYMENT_PROVIDER;
-    if (!provider) {
+    if (!whopConfigured()) {
       return json(
         { ok: false, message: "Live payments aren't configured yet — no payment was taken." },
         503,
       );
     }
-    return json(
-      { ok: false, message: `Live payments via ${provider} are not wired yet (Phase 2).` },
-      503,
-    );
+
+    // 1. Park the stake as `pending` — the webhook is what flips it to `paid`.
+    const { data: pending, error: pendingErr } = await sb
+      .from("claims")
+      .insert({
+        state_code: stateCode,
+        city_id: cityId,
+        city_name: cityName,
+        org_name: orgName,
+        pitch,
+        link,
+        amount_cents: chargeCents,
+        currency,
+        status: "pending",
+        provider: "whop",
+        org_email: email || null,
+        edit_token_hash: sha256(editToken),
+        ip_hash: ipHash,
+      })
+      .select("id")
+      .single();
+
+    if (pendingErr || !pending) {
+      console.error("[api/stake] pending insert failed:", pendingErr?.message);
+      return json({ ok: false, message: "Could not open the checkout — try again." }, 503);
+    }
+
+    // 2. One one-time plan for this exact stake → Whop's hosted checkout.
+    try {
+      const checkout = await createWhopCheckout({
+        amountMajor: chargeMajor,
+        title: `${targetLabel} — ${currency} ${chargeMajor} placement`,
+        description: whopDescription({ orgName, link, targetLabel }),
+        metadata: {
+          claim_id: pending.id,
+          state_code: stateCode,
+          city_id: cityId ?? "",
+          org_name: orgName,
+        },
+      });
+
+      // Remember the plan id so a webhook can still find this row if metadata
+      // ever comes through empty.
+      await sb.from("claims").update({ tx_id: checkout.planId || null }).eq("id", pending.id);
+
+      return json({
+        ok: true,
+        mode: "live",
+        pending: true,
+        checkoutUrl: checkout.purchaseUrl,
+        id: pending.id,
+        stateCode,
+        cityId,
+        cityName,
+        currency,
+        amount: chargeMajor,
+        editToken,
+        message: "Opening secure checkout…",
+      });
+    } catch (err) {
+      await sb.from("claims").delete().eq("id", pending.id);
+      console.error("[api/stake] whop checkout failed:", err);
+      return json({ ok: false, message: "Could not open the checkout — try again." }, 502);
+    }
   }
 
   const { data, error } = await sb

@@ -432,9 +432,25 @@ export async function applyPaidClaim(
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ ...claim, email: opts?.email }),
       });
-      const data = (await res.json().catch(() => null)) as { ok?: boolean; message?: string } | null;
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        message?: string;
+        checkoutUrl?: string;
+        pending?: boolean;
+      } | null;
       if (!res.ok || !data?.ok) {
         return { ok: false, message: data?.message ?? "Could not record the stake." };
+      }
+      // Live payments: the stake is parked as `pending` and the buyer goes to
+      // Whop's hosted checkout. The board only shows it once the webhook lands.
+      if (data.pending && data.checkoutUrl) {
+        return {
+          ok: true,
+          pending: true,
+          checkoutUrl: data.checkoutUrl,
+          message: data.message ?? "Opening secure checkout…",
+          stateCode: claim.stateCode,
+        };
       }
       await refreshBoard();
       return {

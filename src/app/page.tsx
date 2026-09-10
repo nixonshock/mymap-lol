@@ -94,7 +94,16 @@ export default function Home() {
       )}
 
       {/* stake modal */}
-      {target && <StakeModal target={target} onClose={() => setTarget(null)} />}
+      {target && (
+        <StakeModal
+          target={target}
+          onClose={() => setTarget(null)}
+          onOpenRules={() => {
+            setTarget(null);
+            setModal("info");
+          }}
+        />
+      )}
 
       {/* icon modals */}
       {modal === "info" && <InfoModal onClose={() => setModal(null)} />}
