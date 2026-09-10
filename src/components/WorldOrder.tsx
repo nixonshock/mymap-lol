@@ -22,9 +22,6 @@ export default function WorldOrder({ onPick, onClose }: Props) {
           <div className="text-[11px] font-extrabold uppercase tracking-[1.54px] text-[#8494ab]">
             the malaysia map · live
           </div>
-          <h2 className="font-display mt-1 text-[31px] font-bold leading-none text-[#3a2418]">
-            🇲🇾 World Order
-          </h2>
           <div className="mt-2 text-[12px] font-extrabold tracking-wide text-[#b8860b]">
             TOP 10 · MOST SPENT
           </div>
