@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import MalaysiaMap from "@/components/MalaysiaMap";
 import Header from "@/components/Header";
 import StatsBar from "@/components/StatsBar";
@@ -10,13 +10,14 @@ import CitiesPanel from "@/components/CitiesPanel";
 import StakeModal from "@/components/StakeModal";
 import { BoardModal, InfoModal, SearchModal } from "@/components/Modals";
 import { startBoardSync } from "@/lib/store";
+import type { StakeTarget } from "@/lib/types";
 
 /** Desktop shell: left rail (brand → live activity → world order), the map
  *  centred in its own column, right rail (stats → cities list). Below xl the
  *  rails collapse and the panels become sheets, leaving a full-bleed map.
  *  Rail width / gutter are kept in sync with the xl:left-[312px] map insets. */
 export default function Home() {
-  const [stakeCode, setStakeCode] = useState<string | null>(null);
+  const [target, setTarget] = useState<StakeTarget | null>(null);
   const [modal, setModal] = useState<"info" | "board" | "search" | null>(null);
   const [sheet, setSheet] = useState<"order" | "cities" | null>(null);
 
@@ -25,12 +26,14 @@ export default function Home() {
     startBoardSync();
   }, []);
 
+  const pickState = useCallback((code: string) => setTarget({ kind: "state", code }), []);
+
   return (
     <div className="map-stage">
       {/* full-bleed ocean; the map is centred in the middle column on desktop
           (left/right insets = gutter + rail width + gap) and full-bleed below xl */}
       <div className="absolute inset-0 flex items-center justify-center xl:bottom-3 xl:left-[312px] xl:right-[312px] xl:top-3">
-        <MalaysiaMap selectedCode={stakeCode} onSelect={setStakeCode} />
+        <MalaysiaMap selectedCode={target?.kind === "state" ? target.code : null} onSelect={pickState} />
       </div>
 
       {/* overlay UI */}
@@ -39,10 +42,10 @@ export default function Home() {
         <div className="absolute left-4 right-4 top-4 flex flex-col gap-3 xl:bottom-3 xl:left-3 xl:right-auto xl:top-3 xl:w-[288px]">
           <Header onOpen={setModal} onClaim={() => setModal("search")} />
           <div className="hidden min-h-[140px] flex-[3] xl:block">
-            <LiveActivity onPick={setStakeCode} />
+            <LiveActivity onPick={setTarget} />
           </div>
           <div className="hidden min-h-0 flex-[6] xl:block">
-            <WorldOrder onPick={setStakeCode} />
+            <WorldOrder onPick={pickState} />
           </div>
         </div>
 
@@ -52,7 +55,7 @@ export default function Home() {
             <StatsBar />
           </div>
           <div className="hidden min-h-0 w-full flex-1 xl:flex">
-            <CitiesPanel onPick={setStakeCode} />
+            <CitiesPanel onPick={setTarget} />
           </div>
         </div>
 
@@ -80,21 +83,27 @@ export default function Home() {
         <div className="pointer-events-auto fixed inset-0 z-40 flex items-end justify-center bg-[rgba(30,45,70,0.4)] xl:hidden">
           <div className="h-[86dvh] w-full max-w-md rounded-t-[22px] bg-white p-3 shadow-2xl">
             {sheet === "order" ? (
-              <WorldOrder onPick={setStakeCode} onClose={() => setSheet(null)} />
+              <WorldOrder onPick={pickState} onClose={() => setSheet(null)} />
             ) : (
-              <CitiesPanel onPick={setStakeCode} onClose={() => setSheet(null)} />
+              <CitiesPanel
+                onPick={(t) => {
+                  setSheet(null);
+                  setTarget(t);
+                }}
+                onClose={() => setSheet(null)}
+              />
             )}
           </div>
         </div>
       )}
 
-      {/* stakeholder / stake modal */}
-      {stakeCode && <StakeModal code={stakeCode} onClose={() => setStakeCode(null)} />}
+      {/* stake modal */}
+      {target && <StakeModal target={target} onClose={() => setTarget(null)} />}
 
       {/* icon modals */}
       {modal === "info" && <InfoModal onClose={() => setModal(null)} />}
       {modal === "board" && <BoardModal onClose={() => setModal(null)} />}
-      {modal === "search" && <SearchModal onClose={() => setModal(null)} onPick={setStakeCode} />}
+      {modal === "search" && <SearchModal onClose={() => setModal(null)} onPick={pickState} />}
     </div>
   );
 }

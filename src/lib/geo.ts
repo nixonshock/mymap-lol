@@ -1,5 +1,6 @@
 import { geoMercator, type GeoProjection } from "d3-geo";
 import type { FeatureCollection, Position } from "geojson";
+import { STATES } from "./states";
 
 export interface FeatureLayout {
   code: string;
@@ -184,19 +185,60 @@ export function buildMapGeom(geojson: FeatureCollection, width = 1000, height = 
   return { projection, path, viewBox, layout };
 }
 
-/** Interpolate between two colors (0..1). */
-function mix(a: number[], b: number[], t: number) {
-  const c = a.map((v, i) => Math.round(v + (b[i] - v) * t));
-  return `rgb(${c[0]},${c[1]},${c[2]})`;
+/**
+ * Per-state colour.
+ *
+ * Every state gets its own hue: the 16 states sit 22.5° apart on the hue circle
+ * and are handed out in bit-reversed order, so no two states look alike and
+ * neighbours on the list (or on the map) are as far apart in hue as the circle
+ * allows. A second axis — alternate states ride a slightly lighter band — keeps
+ * hue-neighbours apart too. Staking deepens and saturates a state's own colour,
+ * so an open state is a pale tint and a claimed one is unmistakably solid.
+ */
+function hueSlots(n: number): number {
+  let slots = 1;
+  while (slots * 2 <= n) slots *= 2;
+  return slots;
 }
 
-const EMPTY_COLOR = [220, 227, 235];
-const OWNED_LOW = [214, 240, 224];
-const OWNED_HIGH = [117, 199, 153];
-
-/** Color a state by its total stake: empty = visible slate, claimed = green. */
-export function colorForTotal(total: number, maxTotal: number): string {
-  if (total <= 0) return `rgb(${EMPTY_COLOR.join(",")})`;
-  const t = Math.log1p(total) / Math.log1p(Math.max(total, maxTotal, 1));
-  return mix(OWNED_LOW, OWNED_HIGH, Math.min(1, 0.35 + 0.65 * t));
+function bitReverse(i: number, bits: number): number {
+  let out = 0;
+  for (let b = 0; b < bits; b++) out |= ((i >> b) & 1) << (bits - 1 - b);
+  return out;
 }
+
+/** Position of a state's colour on the hue circle (0 … slots-1). */
+export function stateSlot(code: string): number {
+  const slots = hueSlots(STATES.length);
+  const i = STATES.findIndex((s) => s.code === code);
+  return bitReverse(i >= 0 ? i : 0, Math.round(Math.log2(slots)));
+}
+
+export function stateHue(code: string): number {
+  return Math.round((stateSlot(code) * 360) / hueSlots(STATES.length) + 12) % 360;
+}
+
+/** Fill for a state: pale when open, deeper the more is staked on it. */
+export function stateFill(code: string, total: number, maxTotal: number): string {
+  const h = stateHue(code);
+  const lift = stateSlot(code) % 2 === 0 ? 2 : -2; // second axis of variation
+  if (total <= 0) return `hsl(${h} 52% ${lift > 0 ? 83 : 77}%)`;
+  const t = Math.min(
+    1,
+    Math.log1p(total) / Math.log1p(Math.max(total, maxTotal, 1)),
+  );
+  const p = 0.35 + 0.65 * t; // 0.35 at the minimum stake … 1 at the top
+  const light = 52 - 14 * p + lift; // ~54% … ~36%
+  return `hsl(${h} 66% ${light.toFixed(1)}%)`;
+}
+
+/** Ink for the holder's name printed on a claimed state (dark tint of its hue). */
+export function stateInk(code: string): string {
+  return `hsl(${stateHue(code)} 60% 18%)`;
+}
+
+/** Colour of a city pin: orange when open, dark ink when someone holds it. */
+export function cityPin(claimed: boolean): string {
+  return claimed ? "#1f2b3e" : "#f2a13c";
+}
+

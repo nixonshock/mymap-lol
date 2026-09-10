@@ -26,6 +26,7 @@ export default function StatsBar() {
       <div>
         <span className="mr-1">🌍</span>
         {stats.statesClaimed} states live
+        {stats.citiesClaimed > 0 && <span className="text-[#1f7a55]"> · {stats.citiesClaimed} cities</span>}
       </div>
       <div>
         <span className="mr-1">💰</span>

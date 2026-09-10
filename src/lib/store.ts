@@ -1,6 +1,14 @@
 import type { Claim, HolderRow, StateLeaderboard, StakeResult } from "./types";
 import { PRICING, STATES, stateCodeToName } from "./states";
-import { emptySnapshot, fetchBoard, type BoardHolder, type BoardSnapshot, type BoardState } from "./board";
+import { CITIES, cityId, type City } from "./cities";
+import {
+  emptySnapshot,
+  fetchBoard,
+  type BoardCity,
+  type BoardHolder,
+  type BoardSnapshot,
+  type BoardState,
+} from "./board";
 
 /**
  * Board store.
@@ -12,11 +20,17 @@ import { emptySnapshot, fetchBoard, type BoardHolder, type BoardSnapshot, type B
  *              surface, but the data lives in this browser's localStorage, so
  *              the product keeps working end-to-end before launch.
  *
+ * Two kinds of stake live in the same collection:
+ *   • state stakes  (no cityId) — they colour the state and drive World Order.
+ *   • city  stakes  (with cityId) — they belong to that city only and are
+ *     listed in the Cities panel; they never claim the surrounding state.
+ *
  * Components only use the exported queries below, so the two modes are
  * interchangeable from their point of view.
  */
 
 const KEY = "mymap:claims:v1";
+const CITY_KEY = "mymap:cities:v1";
 
 // ---------------------------------------------------------------- local storage
 function loadLocal(): Claim[] {
@@ -40,26 +54,70 @@ function saveLocal(claims: Claim[]) {
   }
 }
 
+/** Cities a visitor added themselves (no coordinates, so no map pin). */
+function loadCustomCities(): City[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(CITY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as { cities: { name: string; state: string }[] };
+    if (!Array.isArray(parsed.cities)) return [];
+    return parsed.cities
+      .filter((c) => c && typeof c.name === "string" && typeof c.state === "string")
+      .map((c) => ({
+        id: cityId(c.name, c.state),
+        name: c.name,
+        state: c.state,
+        custom: true,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomCities(cities: City[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      CITY_KEY,
+      JSON.stringify({ version: 1, cities: cities.map((c) => ({ name: c.name, state: c.state })) }),
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+// ---------------------------------------------------------------- aggregation
+function addToOrg(perOrg: Map<string, HolderRow>, c: Claim) {
+  const cur =
+    perOrg.get(c.orgName) ??
+    ({ orgName: c.orgName, pitch: c.pitch, link: c.link, total: 0, claims: 0, isTop: false } as HolderRow);
+  cur.total += c.amount;
+  cur.claims += 1;
+  if (c.pitch) cur.pitch = c.pitch;
+  if (c.link) cur.link = c.link;
+  perOrg.set(c.orgName, cur);
+}
+
+const topDown = (rows: HolderRow[]) => [...rows].sort((a, b) => b.total - a.total);
+
 /** Aggregate browser-local claims into the same shape /api/board returns. */
 function buildLocalSnapshot(claims: Claim[]): BoardSnapshot {
   const paid = claims.filter((c) => c.status === "paid");
-  const byState = new Map<string, Map<string, HolderRow>>();
+  const stateStakes = paid.filter((c) => !c.cityId);
+  const cityStakes = paid.filter((c) => c.cityId);
 
-  for (const c of paid) {
+  // --- states (state-level stakes only: a city stake never claims a state)
+  const byState = new Map<string, Map<string, HolderRow>>();
+  for (const c of stateStakes) {
     const perOrg = byState.get(c.stateCode) ?? new Map<string, HolderRow>();
-    const cur =
-      perOrg.get(c.orgName) ??
-      ({ orgName: c.orgName, pitch: c.pitch, link: c.link, total: 0, claims: 0, isTop: false } as HolderRow);
-    cur.total += c.amount;
-    cur.claims += 1;
-    if (c.pitch) cur.pitch = c.pitch;
-    perOrg.set(c.orgName, cur);
+    addToOrg(perOrg, c);
     byState.set(c.stateCode, perOrg);
   }
 
   const states: BoardState[] = STATES.map((s) => {
     const perOrg = byState.get(s.code);
-    const holders = perOrg ? [...perOrg.values()].sort((a, b) => b.total - a.total) : [];
+    const holders = perOrg ? topDown([...perOrg.values()]) : [];
     return {
       code: s.code,
       name: s.name,
@@ -69,12 +127,39 @@ function buildLocalSnapshot(claims: Claim[]): BoardSnapshot {
     };
   });
 
-  const claimed = states.filter((s) => s.count > 0);
+  // --- cities
+  const byCity = new Map<string, { name: string; stateCode: string; perOrg: Map<string, HolderRow> }>();
+  for (const c of cityStakes) {
+    const id = c.cityId as string;
+    const entry =
+      byCity.get(id) ??
+      { name: c.cityName || id, stateCode: c.stateCode, perOrg: new Map<string, HolderRow>() };
+    addToOrg(entry.perOrg, c);
+    byCity.set(id, entry);
+  }
+
+  const cities: BoardCity[] = [...byCity.entries()]
+    .map(([id, e]) => {
+      const holders = topDown([...e.perOrg.values()]);
+      return {
+        id,
+        name: e.name,
+        stateCode: e.stateCode,
+        stateName: stateCodeToName(e.stateCode),
+        total: holders.reduce((sum, h) => sum + h.total, 0),
+        count: holders.reduce((sum, h) => sum + h.claims, 0),
+        holders: holders.map((h) => ({ ...h, isTop: false })),
+      };
+    })
+    .sort((a, b) => b.total - a.total);
+
+  const claimedStates = states.filter((s) => s.count > 0);
+
   const byOrg = new Map<string, { total: number; states: Set<string> }>();
   for (const c of paid) {
     const cur = byOrg.get(c.orgName) ?? { total: 0, states: new Set<string>() };
     cur.total += c.amount;
-    cur.states.add(c.stateCode);
+    cur.states.add(c.cityId ?? c.stateCode);
     byOrg.set(c.orgName, cur);
   }
 
@@ -82,21 +167,25 @@ function buildLocalSnapshot(claims: Claim[]): BoardSnapshot {
     mode: "local",
     at: Date.now(),
     states,
+    cities,
     activity: [...paid]
       .sort((a, b) => b.at - a.at)
       .slice(0, 30)
       .map((c) => ({
         stateCode: c.stateCode,
         stateName: stateCodeToName(c.stateCode),
+        cityId: c.cityId,
+        cityName: c.cityName,
         orgName: c.orgName,
         amount: c.amount,
         at: c.at,
       })),
     stats: {
-      statesClaimed: claimed.length,
+      statesClaimed: claimedStates.length,
       statesTotal: STATES.length,
-      totalStaked: claimed.reduce((sum, s) => sum + s.total, 0),
-      totalClaims: claimed.reduce((sum, s) => sum + s.count, 0),
+      citiesClaimed: cities.length,
+      totalStaked: paid.reduce((sum, c) => sum + c.amount, 0),
+      totalClaims: paid.length,
     },
     topOrgs: [...byOrg.entries()]
       .map(([orgName, v]) => ({ orgName, total: v.total, states: v.states.size }))
@@ -107,6 +196,7 @@ function buildLocalSnapshot(claims: Claim[]): BoardSnapshot {
 
 // ---------------------------------------------------------------- module state
 let localClaims: Claim[] = typeof window !== "undefined" ? loadLocal() : [];
+let customCities: City[] = typeof window !== "undefined" ? loadCustomCities() : [];
 let snapshot: BoardSnapshot = localClaims.length ? buildLocalSnapshot(localClaims) : emptySnapshot("local");
 let version = 0;
 let pollMs = 60_000;
@@ -134,6 +224,55 @@ export const isLive = () => snapshot.mode === "live";
 export function topHolder(code: string): BoardHolder | null {
   const state = snapshot.states.find((s) => s.code === code);
   return state?.holders?.[0] ?? null;
+}
+
+/** The #1 holder on a city, or null when nobody has staked it yet. */
+export function topHolderForCity(id: string): BoardHolder | null {
+  const city = snapshot.cities.find((c) => c.id === id);
+  return city?.holders?.[0] ?? null;
+}
+
+// ---------------------------------------------------------------- cities
+/** The city catalogue: built-ins, plus this visitor's own cities, plus any
+ *  city that exists in the shared board (someone else may have added it). */
+export function allCities(): City[] {
+  const out = new Map<string, City>();
+  for (const c of CITIES) out.set(c.id, c);
+  for (const c of customCities) if (!out.has(c.id)) out.set(c.id, c);
+  for (const c of snapshot.cities) {
+    if (!out.has(c.id)) {
+      out.set(c.id, { id: c.id, name: c.name, state: c.stateCode, custom: true });
+    }
+  }
+  return [...out.values()];
+}
+
+export function cityById(id: string): City | null {
+  return allCities().find((c) => c.id === id) ?? null;
+}
+
+/**
+ * Add a city a visitor wants to stake on. Returns the city (existing one if it
+ * is already in the catalogue) or null when the name is unusable.
+ */
+export function addCity(name: string, stateCode: string): City | null {
+  const clean = name
+    .replace(/[\u0000-\u001F\u007F]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 40);
+  if (clean.length < 2) return null;
+  if (!STATES.some((s) => s.code === stateCode)) return null;
+
+  const id = cityId(clean, stateCode);
+  const existing = allCities().find((c) => c.id === id);
+  if (existing) return existing;
+
+  const city: City = { id, name: clean, state: stateCode, custom: true };
+  customCities = [...customCities, city];
+  saveCustomCities(customCities);
+  emit();
+  return city;
 }
 
 // ---------------------------------------------------------------- server sync
@@ -189,12 +328,47 @@ export function stateLeaderboard(code: string): StateLeaderboard {
   };
 }
 
+/** Same shape as a state leaderboard, but for one city (code = city id). */
+export function cityLeaderboard(id: string): StateLeaderboard {
+  const board = snapshot.cities.find((c) => c.id === id);
+  const holders = (board?.holders ?? []).map((h) => ({ ...h, isTop: false }));
+  if (holders[0]) holders[0].isTop = true;
+  return {
+    code: id,
+    // Before anyone stakes it, the name comes from the city catalogue.
+    name: board?.name ?? cityById(id)?.name ?? id,
+    holders,
+    totalStake: holders.reduce((sum, h) => sum + h.total, 0),
+    isEmpty: holders.length === 0,
+  };
+}
+
+/** State totals only — what colours the map (city stakes are excluded). */
 export function allTotals(): Record<string, { total: number; count: number }> {
   const out: Record<string, { total: number; count: number }> = {};
   for (const s of snapshot.states) {
     if (s.count > 0) out[s.code] = { total: s.total, count: s.count };
   }
   return out;
+}
+
+/** Totals per city id, for the Cities panel and the map pins. */
+export function cityTotals(extraIds: string[] = []): Record<string, { total: number; count: number }> {
+  const out: Record<string, { total: number; count: number }> = {};
+  for (const c of snapshot.cities) out[c.id] = { total: c.total, count: c.count };
+  for (const id of extraIds) if (!out[id]) out[id] = { total: 0, count: 0 };
+  return out;
+}
+
+export function cityBoard(): BoardCity[] {
+  return snapshot.cities;
+}
+
+/** Cities inside a state that someone has staked on (for the map tooltip). */
+export function citiesInState(stateCode: string): { id: string; name: string; total: number }[] {
+  return snapshot.cities
+    .filter((c) => c.stateCode === stateCode)
+    .map((c) => ({ id: c.id, name: c.name, total: c.total }));
 }
 
 export function globalStats() {
@@ -212,7 +386,8 @@ export function recentClaims(n = 8) {
 
 /** Leaderboard of states by total stake, each carrying its current top holder. */
 export function worldOrder(n = 10) {
-  return Object.entries(allTotals())
+  const stateTotals = allTotals();
+  return Object.entries(stateTotals)
     .map(([code, v]) => {
       const leader = topHolder(code);
       return {
@@ -231,7 +406,7 @@ export function globalTopOrgs(n = 10) {
   return snapshot.topOrgs.slice(0, n);
 }
 
-/** Minimum you must pay now so that `orgName`'s total takes the #1 spot on this state. */
+/** Minimum you must pay now so that `orgName`'s total takes the #1 spot. */
 export function minimumToOvertake(lb: StateLeaderboard, orgName: string): number {
   if (lb.isEmpty) return PRICING.minClaim;
   const mine = lb.holders.find((h) => h.orgName === orgName)?.total ?? 0;
@@ -266,7 +441,7 @@ export async function applyPaidClaim(
         ok: true,
         message: data.message ?? "Stake applied.",
         stateCode: claim.stateCode,
-        leaderboard: stateLeaderboard(claim.stateCode),
+        leaderboard: claim.cityId ? cityLeaderboard(claim.cityId) : stateLeaderboard(claim.stateCode),
       };
     } catch {
       return { ok: false, message: "Network problem — the stake was not recorded." };
@@ -287,6 +462,6 @@ export async function applyPaidClaim(
     ok: true,
     message: "Stake applied.",
     stateCode: full.stateCode,
-    leaderboard: stateLeaderboard(full.stateCode),
+    leaderboard: full.cityId ? cityLeaderboard(full.cityId) : stateLeaderboard(full.stateCode),
   };
 }

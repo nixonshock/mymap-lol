@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FeatureCollection } from "geojson";
-import { buildMapGeom, colorForTotal, type MapFeature } from "@/lib/geo";
+import { buildMapGeom, cityPin, stateFill, stateInk, type MapFeature } from "@/lib/geo";
 import { useSyncExternalStore } from "react";
-import { subscribe, getVersion, allTotals, stateLeaderboard, topHolder } from "@/lib/store";
+import { subscribe, getVersion, allTotals, citiesInState, cityTotals, stateLeaderboard, topHolder } from "@/lib/store";
 import { PRICING, money, moneyBoth, stateCodeToName } from "@/lib/states";
 import { linkLabel, safeHref } from "@/lib/links";
 import { CITIES } from "@/lib/cities";
@@ -70,6 +70,7 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
   const downHrefRef = useRef<string | null>(null);
 
   const totals = useMemo(() => allTotals(), [version]);
+  const stakedCities = useMemo(() => cityTotals(), [version]);
   const maxTotal = useMemo(
     () => Math.max(1, ...Object.values(totals).map((t) => t.total)),
     [totals],
@@ -86,11 +87,11 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
 
   const projectedCities = useMemo(() => {
     if (!geom) return [];
-    const out: { x: number; y: number; name: string; major?: boolean }[] = [];
+    const out: { x: number; y: number; id: string; name: string; major?: boolean }[] = [];
     for (const c of CITIES) {
-      const p = geom.projection([c.lng, c.lat]);
+      const p = geom.projection([c.lng as number, c.lat as number]);
       if (p && Number.isFinite(p[0]) && Number.isFinite(p[1])) {
-        out.push({ x: p[0], y: p[1], name: c.name, major: c.major });
+        out.push({ x: p[0], y: p[1], id: c.id, name: c.name, major: c.major });
       }
     }
     return out;
@@ -313,8 +314,8 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
                 data-code={code}
                 d={d}
                 fillRule="evenodd"
-                fill={colorForTotal(total, maxTotal)}
-                stroke={isSel ? "#1f7a55" : isHover ? "#7aa0c8" : "#a9bccd"}
+                fill={stateFill(code, total, maxTotal)}
+                stroke={isSel ? "#1f2b3e" : isHover ? "#7aa0c8" : "#a8b8c8"}
                 strokeWidth={isSel ? 1.8 : isHover ? 1.3 : 1}
                 className="cursor-pointer transition-[fill] duration-150"
                 onMouseEnter={() => setHovered(code)}
@@ -364,7 +365,7 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
                         dominantBaseline="middle"
                         className="select-none"
                         fontSize={ownerSize}
-                        fill="#0f5f40"
+                        fill={stateInk(l.code)}
                         fontWeight={800}
                         style={{
                           paintOrder: "stroke",
@@ -380,19 +381,21 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
                 </g>
               );
             })}
-          {/* city markers — the names live in the Cities list panel, so the map
-              keeps only the orange pins (nothing gets clipped or hidden). */}
+          {/* city markers — orange when open, dark ink when someone holds the
+              city. The names live in the Cities panel so nothing gets clipped. */}
           {projectedCities.map((c) => {
-            const r = 2.6 / Math.max(1, Math.sqrt(tf.k));
+            const held = (stakedCities[c.id]?.total ?? 0) > 0;
+            const k = Math.max(1, tf.k);
+            const r = (held ? 4.4 : 2.6) / Math.max(1, Math.sqrt(k));
             return (
               <circle
-                key={`city-${c.name}`}
+                key={`city-${c.id}`}
                 cx={c.x}
                 cy={c.y}
                 r={r}
-                fill="#f2a13c"
+                fill={cityPin(held)}
                 stroke="#ffffff"
-                strokeWidth={1.1 / Math.max(1, Math.pow(tf.k, 0.5))}
+                strokeWidth={(held ? 1.8 : 1.1) / Math.max(1, Math.pow(k, 0.5))}
                 opacity={0.97}
                 className="pointer-events-none"
               />
@@ -445,6 +448,7 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
           total={totals[hovered]?.total ?? 0}
           isEmpty={!totals[hovered]}
           owner={totals[hovered] ? topHolder(hovered) : null}
+          cityStakes={citiesInState(hovered)}
         />
       )}
     </div>
@@ -458,6 +462,7 @@ function HoverTip({
   total,
   isEmpty,
   owner,
+  cityStakes,
 }: {
   x: number;
   y: number;
@@ -465,6 +470,7 @@ function HoverTip({
   total: number;
   isEmpty: boolean;
   owner: { orgName: string; pitch: string; link?: string } | null;
+  cityStakes: { id: string; name: string; total: number }[];
 }) {
   const left = Math.min(x + 14, typeof window !== "undefined" ? window.innerWidth - 220 : x);
   const site = linkLabel(owner?.link);
@@ -492,6 +498,11 @@ function HoverTip({
           </>
         )}
       </div>
+      {cityStakes.length > 0 && (
+        <div className="mt-0.5 max-w-[250px] truncate font-semibold text-[#3a4a5e]">
+          🏙️ {cityStakes.map((c) => c.name).join(", ")} staked
+        </div>
+      )}
     </div>
   );
 }

@@ -17,9 +17,23 @@ export interface BoardState {
   holders: BoardHolder[]; // sorted by total desc, leader first
 }
 
+/** A city someone has staked on. City stakes never colour the state they sit in. */
+export interface BoardCity {
+  id: string;
+  name: string;
+  stateCode: string;
+  stateName: string;
+  total: number;
+  count: number;
+  holders: BoardHolder[]; // sorted by total desc, leader first
+}
+
 export interface BoardActivity {
   stateCode: string;
   stateName: string;
+  /** set when the stake was placed on a city rather than the state */
+  cityId?: string;
+  cityName?: string;
   orgName: string;
   amount: number;
   at: number; // epoch ms
@@ -28,6 +42,7 @@ export interface BoardActivity {
 export interface BoardStats {
   statesClaimed: number;
   statesTotal: number;
+  citiesClaimed: number;
   totalStaked: number;
   totalClaims: number;
 }
@@ -43,6 +58,7 @@ export interface BoardSnapshot {
   mode: "live" | "local";
   at: number;
   states: BoardState[];
+  cities: BoardCity[];
   activity: BoardActivity[];
   stats: BoardStats;
   topOrgs: BoardOrg[];
@@ -53,8 +69,15 @@ export function emptySnapshot(mode: "live" | "local" = "local"): BoardSnapshot {
     mode,
     at: 0,
     states: [],
+    cities: [],
     activity: [],
-    stats: { statesClaimed: 0, statesTotal: 16, totalStaked: 0, totalClaims: 0 },
+    stats: {
+      statesClaimed: 0,
+      statesTotal: 16,
+      citiesClaimed: 0,
+      totalStaked: 0,
+      totalClaims: 0,
+    },
     topOrgs: [],
   };
 }

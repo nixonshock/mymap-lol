@@ -1,6 +1,14 @@
 -- mymap.lol — shared leaderboard schema (Supabase / Postgres)
 -- Run this whole file in the Supabase SQL editor (Dashboard → SQL Editor → New query).
--- Safe to re-run: every statement is idempotent.
+-- Safe to re-run: every statement is idempotent, and the ALTER lines upgrade a
+-- database created before city stakes existed.
+--
+-- Two kinds of stake share the `claims` table:
+--   • state stakes — city_id is null. They colour the state and drive the
+--     state leaderboards + World Order.
+--   • city stakes  — city_id is set ("my-06:kuantan"). They belong to that city
+--     only: the state views below filter them out, so a city stake never claims
+--     the surrounding state.
 --
 -- Security model: row level security is ON and there are NO policies, so the
 -- public anon/authenticated keys can read nothing and write nothing. Only the
@@ -24,6 +32,8 @@ create table if not exists states (
 create table if not exists claims (
   id              uuid primary key default gen_random_uuid(),
   state_code      text not null references states(code) on delete cascade,
+  city_id         text,                               -- "<state>:<slug>" when the stake is for a city
+  city_name       text,                               -- display name that travels with the claim
   org_name        text not null check (char_length(org_name) between 2 and 60),
   pitch           text not null default '' check (char_length(pitch) <= 140),
   link            text check (link is null or link = '' or link ~* '^https?://'),
@@ -40,7 +50,12 @@ create table if not exists claims (
   paid_at         timestamptz
 );
 
+-- Upgrade path for databases created before city stakes:
+alter table claims add column if not exists city_id   text;
+alter table claims add column if not exists city_name text;
+
 create index if not exists claims_state_idx  on claims(state_code);
+create index if not exists claims_city_idx   on claims(city_id);
 create index if not exists claims_org_idx    on claims(org_name);
 create index if not exists claims_paid_idx   on claims(status, created_at desc);
 create index if not exists claims_txid_idx   on claims(provider, tx_id);
@@ -54,8 +69,9 @@ create table if not exists stake_events (
 );
 create index if not exists stake_events_ip_idx on stake_events(ip_hash, created_at desc);
 
--- ---------------------------------------------------------------- views
--- Per-org totals inside a state (the per-state leaderboard).
+-- ---------------------------------------------------------------- state views
+-- Per-org totals inside a state (the per-state leaderboard). City stakes are
+-- excluded: they never claim the state.
 create or replace view state_holders as
 select
   c.state_code,
@@ -65,7 +81,7 @@ select
   (array_agg(c.pitch order by c.created_at desc))[1] as pitch,
   (array_agg(c.link  order by c.created_at desc))[1] as link
 from claims c
-where c.status = 'paid'
+where c.status = 'paid' and c.city_id is null
 group by c.state_code, c.org_name;
 
 -- One row per state with its live totals + current leader.
@@ -74,50 +90,81 @@ select
   s.code,
   s.name,
   s.ordinal,
-  coalesce(sum(c.amount_cents) filter (where c.status = 'paid'), 0)::bigint as total_cents,
-  count(c.id) filter (where c.status = 'paid')::int                        as claims,
+  coalesce(sum(c.amount_cents) filter (where c.status = 'paid' and c.city_id is null), 0)::bigint as total_cents,
+  count(c.id) filter (where c.status = 'paid' and c.city_id is null)::int                        as claims,
   (select h.org_name from state_holders h
-    where h.state_code = s.code order by h.total_cents desc limit 1)       as top_org
+    where h.state_code = s.code order by h.total_cents desc limit 1)                             as top_org
 from states s
 left join claims c on c.state_code = s.code
 group by s.code, s.name, s.ordinal;
 
--- Live activity feed (most recent paid stakes).
+-- Live activity feed (most recent paid stakes, state and city alike).
 create or replace view recent_activity as
 select
   c.state_code, s.name as state_name, c.org_name,
-  c.amount_cents, c.created_at
+  c.amount_cents, c.created_at,
+  c.city_id, c.city_name
 from claims c
 join states s on s.code = c.state_code
 where c.status = 'paid'
 order by c.created_at desc
 limit 200;
 
--- Organizations ranked across every state (the "board" modal).
+-- Organizations ranked across every territory (the "board" modal).
 create or replace view top_orgs as
 select
   org_name,
-  sum(amount_cents)::bigint      as total_cents,
-  count(distinct state_code)::int as states
+  sum(amount_cents)::bigint                      as total_cents,
+  count(distinct coalesce(city_id, state_code))::int as states
 from claims
 where status = 'paid'
 group by org_name
 order by total_cents desc
 limit 100;
 
+-- ---------------------------------------------------------------- city views
+-- Per-org totals inside one city (the per-city leaderboard).
+create or replace view city_holders as
+select
+  c.city_id,
+  c.org_name,
+  sum(c.amount_cents)::bigint as total_cents,
+  count(*)::int               as claims,
+  (array_agg(c.pitch order by c.created_at desc))[1] as pitch,
+  (array_agg(c.link  order by c.created_at desc))[1] as link
+from claims c
+where c.status = 'paid' and c.city_id is not null
+group by c.city_id, c.org_name;
+
+-- One row per staked city with its totals + current leader.
+create or replace view city_totals as
+select
+  c.city_id                                                     as id,
+  (array_agg(c.city_name order by c.created_at desc))[1]        as name,
+  c.state_code,
+  s.name                                                        as state_name,
+  sum(c.amount_cents)::bigint                                   as total_cents,
+  count(*)::int                                                 as claims,
+  (select h.org_name from city_holders h
+    where h.city_id = c.city_id order by h.total_cents desc limit 1) as top_org
+from claims c
+join states s on s.code = c.state_code
+where c.status = 'paid' and c.city_id is not null
+group by c.city_id, c.state_code, s.name;
+
 -- ---------------------------------------------------------------- trigger
 -- Keep states.total_cents / top_org in sync so a future direct-read path
--- (map colours) never disagrees with the views above.
+-- (map colours) never disagrees with the views above. State stakes only.
 create or replace function refresh_state_totals(p_state text)
 returns void language plpgsql as $$
 begin
   update states s
   set total_cents = coalesce((
         select sum(amount_cents) from claims c
-        where c.state_code = p_state and c.status = 'paid'), 0),
+        where c.state_code = p_state and c.status = 'paid' and c.city_id is null), 0),
       top_org = (
         select org_name from claims c
-        where c.state_code = p_state and c.status = 'paid'
+        where c.state_code = p_state and c.status = 'paid' and c.city_id is null
         group by org_name order by sum(amount_cents) desc limit 1),
       updated_at = now()
   where s.code = p_state;

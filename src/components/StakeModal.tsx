@@ -4,20 +4,30 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   subscribe,
   getVersion,
+  cityLeaderboard,
   stateLeaderboard,
   minimumToOvertake,
   applyPaidClaim,
 } from "@/lib/store";
 import { checkout } from "@/lib/checkout";
 import { linkLabel, safeHref } from "@/lib/links";
-import { PRICING, money, moneyBoth, moneyMyr } from "@/lib/states";
-import type { StateLeaderboard } from "@/lib/types";
+import { PRICING, money, moneyBoth, moneyMyr, stateCodeToName } from "@/lib/states";
+import type { StateLeaderboard, StakeTarget } from "@/lib/types";
 
 const EMPTY_FORM = { orgName: "", pitch: "", link: "", email: "" };
 
-export default function StakeModal({ code, onClose }: { code: string; onClose: () => void }) {
+export default function StakeModal({ target, onClose }: { target: StakeTarget; onClose: () => void }) {
   const version = useSyncExternalStore(subscribe, getVersion, getVersion);
-  const lb: StateLeaderboard = useMemo(() => stateLeaderboard(code), [code, version]);
+  const isCity = target.kind === "city";
+  // Narrowed once here so the JSX below can use it without re-checking the union.
+  const cityTarget = target.kind === "city" ? target : null;
+  const lb: StateLeaderboard = useMemo(
+    () => (target.kind === "city" ? cityLeaderboard(target.id) : stateLeaderboard(target.code)),
+    [target, version],
+  );
+  const stateCode = target.kind === "city" ? target.stateCode : target.code;
+  const where = target.kind === "city" ? `${target.name} · ${stateCodeToName(target.stateCode)}` : stateCodeToName(target.code);
+
   const [form, setForm] = useState(EMPTY_FORM);
   const [amount, setAmount] = useState<number>(0);
   const [busy, setBusy] = useState(false);
@@ -40,29 +50,26 @@ export default function StakeModal({ code, onClose }: { code: string; onClose: (
     setBusy(true);
     setResult(null);
     try {
-      const pay = await checkout({
-        stateCode: code,
+      const payload = {
+        stateCode,
+        cityId: cityTarget?.id,
+        cityName: cityTarget?.name,
         orgName: form.orgName.trim(),
         pitch: form.pitch.trim(),
         link: form.link.trim() || undefined,
         amount,
-      });
+      };
+      const pay = await checkout(payload);
       if (pay.status === "paid") {
-        const applied = await applyPaidClaim(
-          {
-            stateCode: code,
-            orgName: form.orgName.trim(),
-            pitch: form.pitch.trim(),
-            link: form.link.trim() || undefined,
-            amount,
-          },
-          { email: form.email.trim() || undefined },
-        );
+        const applied = await applyPaidClaim(payload, { email: form.email.trim() || undefined });
         if (!applied.ok) {
           setResult({ ok: false, message: applied.message });
           return;
         }
-        setResult({ ok: true, message: `${money(amount)} staked on ${lb.name}. You're now a holder!` });
+        setResult({
+          ok: true,
+          message: `${money(amount)} staked on ${lb.name}. You're now a holder!`,
+        });
         setForm(EMPTY_FORM);
       } else {
         setResult({ ok: false, message: pay.message });
@@ -87,10 +94,10 @@ export default function StakeModal({ code, onClose }: { code: string; onClose: (
         <div className="flex items-start justify-between border-b border-[#eef3f9] px-6 py-5">
           <div>
             <div className="text-[11px] font-extrabold uppercase tracking-[1.54px] text-[#8494ab]">
-              {lb.name} · live
+              {where} · live
             </div>
             <h2 className="font-display mt-1 text-[25px] font-bold leading-none text-[#3a2418]">
-              🚩 Stake on {lb.name}
+              {isCity ? "🏙️" : "🚩"} Stake on {lb.name}
             </h2>
             <div className="mt-2 flex items-center gap-2 text-[13px] font-bold text-[#8494ab]">
               <span
@@ -98,6 +105,12 @@ export default function StakeModal({ code, onClose }: { code: string; onClose: (
               />
               {lb.isEmpty ? "Open for claiming" : `${money(lb.totalStake)} staked`} · from {moneyBoth(PRICING.minClaim)}
             </div>
+            {cityTarget && (
+              <div className="mt-1 text-[11.5px] font-semibold text-[#8494ab]">
+                City stakes stay on {cityTarget.name} — {stateCodeToName(cityTarget.stateCode)} itself is not
+                claimed.
+              </div>
+            )}
           </div>
           <button
             type="button"
@@ -116,7 +129,7 @@ export default function StakeModal({ code, onClose }: { code: string; onClose: (
           </div>
           {lb.isEmpty ? (
             <p className="mt-2 text-[13px] font-semibold leading-relaxed text-[#8494ab]">
-              No holder yet. Be the first — plant your flag and own this state.
+              No holder yet. Be the first — plant your flag and own this {isCity ? "city" : "state"}.
             </p>
           ) : (
             <ol className="mt-2 space-y-1.5">

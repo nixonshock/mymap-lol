@@ -13,14 +13,19 @@ and top up the difference to take the #1 spot.
 
 1. **Claim your flag** — plant your organization on any open state from a small
    fee. Your card (name, pitch, link) holds the spot.
-2. **Stake to climb** — your rank is your total stake on that state. Out-stake
-   the current #1 to take the top spot.
-3. **Reclaim anytime** — get passed? Just top up the difference. Your past stake
+2. **Or stake a single city** — a city stake is recorded against that city only:
+   it shows in the Cities panel (with your name and link) and never claims the
+   state around it. Visitors can add a city that isn't in the catalogue.
+3. **Stake to climb** — your rank is your total stake on that state or city.
+   Out-stake the current #1 to take the top spot.
+4. **Reclaim anytime** — get passed? Just top up the difference. Your past stake
    still counts, so nothing is wasted.
 
-`Total staked` per state drives the color (empty = slate, claimed = green,
-deeper green = larger stake). Hover shows the tooltip; click a state on the map
-or a chip to open its leaderboard + claim form.
+`Total staked` per state drives the colour: every state has its own hue (open
+states are pale, staked ones go deep and saturated). Hover shows the tooltip;
+click a state on the map, a chip, a city in the panel, or a World Order row to
+open its leaderboard + stake form. City pins on the map turn dark once a city is
+held.
 
 ## Making money (the model)
 

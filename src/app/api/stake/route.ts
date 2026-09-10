@@ -38,6 +38,10 @@ function parseLink(v: unknown): string | null {
 /**
  * POST /api/stake — record a stake.
  *
+ * A stake is either for a whole state or for one city inside it (`cityId` +
+ * `cityName`). City stakes are stored with the city on the row, and the state
+ * views ignore them, so a city stake never claims the surrounding state.
+ *
  * Payment mode "demo" (default): the claim is written straight in as paid, so
  * the whole funnel keeps working end-to-end. Once a live provider is wired
  * (Phase 2) this writes a `pending` claim and returns the checkout to send the
@@ -60,6 +64,8 @@ export async function POST(req: NextRequest) {
   }
 
   const stateCode = clean(body.stateCode, 8).toUpperCase();
+  const rawCityId = clean(body.cityId, 80).toLowerCase();
+  const rawCityName = clean(body.cityName, 60);
   const orgName = clean(body.orgName, 60);
   const pitch = clean(body.pitch, 140);
   const link = parseLink(body.link);
@@ -78,6 +84,17 @@ export async function POST(req: NextRequest) {
       { ok: false, message: `Amount must be between $${PRICING.minClaim} and $${MAX_AMOUNT}.` },
       400,
     );
+  }
+
+  // City extra: "<state code>:<slug>" — anything else is dropped rather than
+  // stored, and a city stake without a name is not a city stake.
+  const cityId = rawCityId && /^my-\d{2}:[a-z0-9-]{2,60}$/.test(rawCityId) ? rawCityId : null;
+  const cityName = cityId ? rawCityName || null : null;
+  if (cityId && !cityName) {
+    return json({ ok: false, message: "City stakes need a city name." }, 400);
+  }
+  if (cityId && !cityId.startsWith(stateCode.toLowerCase() + ":")) {
+    return json({ ok: false, message: "That city doesn't belong to that state." }, 400);
   }
 
   // The state must exist (FK would also catch it; this gives a clean error).
@@ -133,6 +150,8 @@ export async function POST(req: NextRequest) {
     .from("claims")
     .insert({
       state_code: stateCode,
+      city_id: cityId,
+      city_name: cityName,
       org_name: orgName,
       pitch,
       link,
@@ -160,9 +179,11 @@ export async function POST(req: NextRequest) {
     demoPayment: true,
     id: data.id,
     stateCode,
+    cityId,
+    cityName,
     amount: amountUsd,
     /** private link the buyer can use to edit their card (UI in Phase 3) */
     editToken,
-    message: "Stake applied.",
+    message: cityName ? `Stake applied to ${cityName}.` : "Stake applied.",
   });
 }

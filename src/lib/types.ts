@@ -5,10 +5,14 @@ export interface StateMeta {
   name: string; // display name
 }
 
-// A single stake placed by an org on a state.
+// A single stake placed by an org — on a state, or on one city inside a state.
 export interface Claim {
   id: string;
   stateCode: string;
+  /** Set when the stake is for a city: it then counts against the city only and
+   *  never colours / claims the state it sits in. */
+  cityId?: string;
+  cityName?: string;
   orgName: string;
   pitch: string;
   link?: string;
@@ -18,17 +22,23 @@ export interface Claim {
   status: "paid" | "pending";
 }
 
-// Per-state leaderboard entry, aggregated by org across claims.
+/** What a stake modal is open for. */
+export type StakeTarget =
+  | { kind: "state"; code: string }
+  | { kind: "city"; id: string; name: string; stateCode: string };
+
+// Per-state (or per-city) leaderboard entry, aggregated by org across claims.
 export interface HolderRow {
   orgName: string;
   pitch: string;
   link?: string;
-  total: number; // sum of that org's stakes on this state
+  total: number; // sum of that org's stakes
   claims: number;
   isTop: boolean;
 }
 
 export interface StateLeaderboard {
+  /** state code, or city id when the leaderboard is for a city */
   code: string;
   name: string;
   holders: HolderRow[]; // sorted by total desc
@@ -48,6 +58,8 @@ export interface StakeResult {
 // in LIVE mode this is backed by a real provider (Bitcoin Lightning / card).
 export interface CheckoutRequest {
   stateCode: string;
+  cityId?: string;
+  cityName?: string;
   orgName: string;
   pitch: string;
   link?: string;

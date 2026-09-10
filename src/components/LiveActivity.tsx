@@ -3,9 +3,10 @@
 import { useMemo, useSyncExternalStore } from "react";
 import { subscribe, getVersion, recentClaims } from "@/lib/store";
 import { money } from "@/lib/states";
+import type { StakeTarget } from "@/lib/types";
 
 interface Props {
-  onPick: (code: string) => void;
+  onPick: (target: StakeTarget) => void;
   onClose?: () => void;
 }
 
@@ -41,25 +42,34 @@ export default function LiveActivity({ onPick, onClose }: Props) {
             </p>
           </div>
         ) : (
-          items.map((it, i) => (
-            <button
-              key={`${it.stateCode}-${i}`}
-              type="button"
-              onClick={() => onPick(it.stateCode)}
-              className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition hover:bg-[#f2f7fc]"
-            >
-              <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#1f7a55]" />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[12px] font-bold text-[#1f2b3e]">
-                  {it.orgName} · {money(it.amount)}
+          items.map((it, i) => {
+            const target: StakeTarget = it.cityId
+              ? { kind: "city", id: it.cityId, name: it.cityName || it.cityId, stateCode: it.stateCode }
+              : { kind: "state", code: it.stateCode };
+            return (
+              <button
+                key={`${it.stateCode}-${it.cityId ?? ""}-${i}`}
+                type="button"
+                onClick={() => onPick(target)}
+                className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition hover:bg-[#f2f7fc]"
+              >
+                <span
+                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                    it.cityId ? "bg-[#1f2b3e]" : "bg-[#1f7a55]"
+                  }`}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[12px] font-bold text-[#1f2b3e]">
+                    {it.orgName} · {money(it.amount)}
+                  </div>
+                  <div className="truncate text-[11px] font-semibold text-[#8494ab]">
+                    {it.cityId ? `${it.cityName || it.cityId} · ${it.stateName}` : it.stateName} · {fmt(it.at)}
+                  </div>
                 </div>
-                <div className="truncate text-[11px] font-semibold text-[#8494ab]">
-                  {it.stateName} · {fmt(it.at)}
-                </div>
-              </div>
-              <span className="shrink-0 text-[12px] text-[#8494ab]">→</span>
-            </button>
-          ))
+                <span className="shrink-0 text-[12px] text-[#8494ab]">→</span>
+              </button>
+            );
+          })
         )}
       </div>
     </div>
