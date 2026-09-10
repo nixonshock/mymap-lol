@@ -36,3 +36,19 @@ export const PRICING = {
 
 export const money = (n: number) =>
   `${PRICING.currency}${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+
+/**
+ * Billing is in USD; the ringgit equivalent is shown next to it everywhere a
+ * price is quoted. Set NEXT_PUBLIC_USD_MYR to the current rate (default 4.04,
+ * mid-market Sep 2026) — no live FX feed, so revisit it now and then.
+ */
+export const USD_MYR = (() => {
+  const raw = Number(process.env.NEXT_PUBLIC_USD_MYR);
+  return Number.isFinite(raw) && raw > 0 ? raw : 4.04;
+})();
+
+export const moneyMyr = (usd: number) =>
+  `RM${(usd * USD_MYR).toLocaleString("en-MY", { maximumFractionDigits: 0 })}`;
+
+/** "$10 ≈ RM40" — the standard price label. */
+export const moneyBoth = (usd: number) => `${money(usd)} ≈ ${moneyMyr(usd)}`;

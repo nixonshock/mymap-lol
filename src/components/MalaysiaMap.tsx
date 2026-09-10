@@ -5,7 +5,7 @@ import type { FeatureCollection } from "geojson";
 import { buildMapGeom, colorForTotal, type MapFeature } from "@/lib/geo";
 import { useSyncExternalStore } from "react";
 import { subscribe, getVersion, allTotals, stateLeaderboard } from "@/lib/store";
-import { money, stateCodeToName } from "@/lib/states";
+import { PRICING, money, moneyBoth, stateCodeToName } from "@/lib/states";
 import { CITIES } from "@/lib/cities";
 
 interface Props {
@@ -415,7 +415,7 @@ function HoverTip({
       <div className="font-bold text-[#1f2b3e]">{name}</div>
       <div className="mt-0.5 font-semibold text-[#8494ab]">
         {isEmpty ? (
-          "Open for claiming · from " + money(10)
+          "Open for claiming · from " + moneyBoth(PRICING.minClaim)
         ) : (
           <>
             <span className="text-[#1f7a55]">{money(total)}</span> staked

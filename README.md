@@ -64,14 +64,37 @@ Wire the provider call in `src/lib/checkout.ts` -> `providerCheckout()` (or add
 claim on confirmation. **Never commit real keys** — they come from the
 environment / Vercel project settings.
 
-### 2. Shared, multi-user leaderboard (Supabase)
+### 2. Shared, multi-user leaderboard (Supabase) — Phase 1, DONE in code
 
-Today the leaderboard is browser-local (localStorage), so each visitor sees their
-own world. To make it a real shared map:
+The board is now server-backed by default, with a browser-local fallback so the
+product keeps working before/without a Supabase project:
 
-- Run `supabase/schema.sql` in a Supabase project.
-- Swap the `localStorage` adapter in `src/lib/store.ts` for the Supabase adapter
-  (points at `states`, `claims` tables; server route or the supabase client).
+- **Unconfigured** → `/api/board` answers `{mode:"demo"}`, the client store keeps
+  using localStorage, and `/api/stake` returns 503 (nothing pretends to be shared).
+- **Configured** → `/api/board` returns the shared snapshot, the client polls it
+  (15s, and on tab focus) and stakes write through `/api/stake`.
+
+To switch it on:
+
+1. Create a Supabase project (any region close to Malaysia, e.g. Singapore).
+2. SQL Editor → paste `supabase/schema.sql` → Run. It creates `states`, `claims`,
+   `stake_events`, the views (`state_holders`, `state_totals`, `recent_activity`,
+   `top_orgs`) and lock RLS down with no policies — only the service role (our
+   server routes) can read or write. The browser never talks to Supabase.
+3. Vercel → Project Settings → Environment Variables (and `.env.local` for dev):
+
+   ```
+   SUPABASE_URL=https://<project-ref>.supabase.co
+   SUPABASE_SERVICE_ROLE_KEY=<service role key — server only>
+   IP_SALT=<any long random string>
+   NEXT_PUBLIC_USD_MYR=4.04
+   ```
+
+4. Redeploy. The stats pill switches from "demo board" to "shared board" and
+   every visitor now sees the same map.
+
+API surface: `GET /api/board` (shared snapshot), `POST /api/stake` (validated,
+rate-limited per hashed IP, writes a `paid` claim in demo payment mode).
 
 ### 3. Deploy
 

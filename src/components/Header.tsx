@@ -1,6 +1,6 @@
 "use client";
 
-import { PRICING, money } from "@/lib/states";
+import { PRICING, moneyBoth } from "@/lib/states";
 
 interface Props {
   onOpen: (key: "info" | "board" | "search") => void;
@@ -21,13 +21,13 @@ export default function Header({ onOpen, onClaim }: Props) {
       </div>
 
       {/* CTA + icon buttons */}
-      <div className="mt-1 flex items-center gap-2.5">
+      <div className="mt-1 flex flex-wrap items-center gap-2.5">
         <button
           type="button"
           onClick={onClaim}
           className="font-display rounded-full bg-[#ffc93c] px-4 py-2 text-[14px] font-semibold text-[#4a3400] shadow-md transition hover:brightness-95"
         >
-          Claim a state · from {money(PRICING.minClaim)}
+          Claim a state · from {moneyBoth(PRICING.minClaim)}
         </button>
         <button
           type="button"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import MalaysiaMap from "@/components/MalaysiaMap";
 import Header from "@/components/Header";
 import StatsBar from "@/components/StatsBar";
@@ -9,6 +9,7 @@ import LiveActivity from "@/components/LiveActivity";
 import CitiesPanel from "@/components/CitiesPanel";
 import StakeModal from "@/components/StakeModal";
 import { BoardModal, InfoModal, SearchModal } from "@/components/Modals";
+import { startBoardSync } from "@/lib/store";
 
 /** Desktop shell: left rail (brand → live activity → world order), the map
  *  centred in its own column, right rail (stats → cities list). Below xl the
@@ -18,6 +19,11 @@ export default function Home() {
   const [stakeCode, setStakeCode] = useState<string | null>(null);
   const [modal, setModal] = useState<"info" | "board" | "search" | null>(null);
   const [sheet, setSheet] = useState<"order" | "cities" | null>(null);
+
+  // Poll the shared board (no-op while the backend is unconfigured).
+  useEffect(() => {
+    startBoardSync();
+  }, []);
 
   return (
     <div className="map-stage">

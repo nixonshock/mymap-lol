@@ -9,10 +9,10 @@ import {
   applyPaidClaim,
 } from "@/lib/store";
 import { checkout } from "@/lib/checkout";
-import { PRICING, money } from "@/lib/states";
+import { PRICING, money, moneyBoth, moneyMyr } from "@/lib/states";
 import type { StateLeaderboard } from "@/lib/types";
 
-const EMPTY_FORM = { orgName: "", pitch: "", link: "" };
+const EMPTY_FORM = { orgName: "", pitch: "", link: "", email: "" };
 
 export default function StakeModal({ code, onClose }: { code: string; onClose: () => void }) {
   const version = useSyncExternalStore(subscribe, getVersion, getVersion);
@@ -47,13 +47,20 @@ export default function StakeModal({ code, onClose }: { code: string; onClose: (
         amount,
       });
       if (pay.status === "paid") {
-        applyPaidClaim({
-          stateCode: code,
-          orgName: form.orgName.trim(),
-          pitch: form.pitch.trim(),
-          link: form.link.trim() || undefined,
-          amount,
-        });
+        const applied = await applyPaidClaim(
+          {
+            stateCode: code,
+            orgName: form.orgName.trim(),
+            pitch: form.pitch.trim(),
+            link: form.link.trim() || undefined,
+            amount,
+          },
+          { email: form.email.trim() || undefined },
+        );
+        if (!applied.ok) {
+          setResult({ ok: false, message: applied.message });
+          return;
+        }
         setResult({ ok: true, message: `${money(amount)} staked on ${lb.name}. You're now a holder!` });
         setForm(EMPTY_FORM);
       } else {
@@ -88,7 +95,7 @@ export default function StakeModal({ code, onClose }: { code: string; onClose: (
               <span
                 className={`h-2 w-2 rounded-full ${lb.isEmpty ? "bg-[#c6d4e4]" : "bg-[#1f7a55]"}`}
               />
-              {lb.isEmpty ? "Open for claiming" : `${money(lb.totalStake)} staked`} · from {money(PRICING.minClaim)}
+              {lb.isEmpty ? "Open for claiming" : `${money(lb.totalStake)} staked`} · from {moneyBoth(PRICING.minClaim)}
             </div>
           </div>
           <button
@@ -163,6 +170,13 @@ export default function StakeModal({ code, onClose }: { code: string; onClose: (
               placeholder="Website (optional)"
               className="w-full rounded-xl border border-[#dfe7f0] bg-[#fbfdff] px-3.5 py-2.5 text-[13px] font-semibold text-[#1f2b3e] outline-none transition focus:border-[#b9cde0]"
             />
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              placeholder="Email for your receipt (optional)"
+              className="w-full rounded-xl border border-[#dfe7f0] bg-[#fbfdff] px-3.5 py-2.5 text-[13px] font-semibold text-[#1f2b3e] outline-none transition focus:border-[#b9cde0]"
+            />
             <div className="flex items-center gap-2">
               <input
                 type="number"
@@ -180,11 +194,12 @@ export default function StakeModal({ code, onClose }: { code: string; onClose: (
             {isTopForMe ? (
               <>You hold the top spot with {money(orgTotal)}. Add more to grow your lead.</>
             ) : lb.isEmpty ? (
-              <>Claim from {money(PRICING.minClaim)}. Your rank = your total stake.</>
+              <>Claim from {moneyBoth(PRICING.minClaim)}. Your rank = your total stake.</>
             ) : (
               <>
                 Current #1 is at {money(lb.holders[0].total)}. Stake{" "}
-                <span className="text-[#1f2b3e]">{money(suggested)}</span> to take the top spot.
+                <span className="text-[#1f2b3e]">{money(suggested)}</span>{" "}
+                <span className="text-[#8494ab]">({moneyMyr(suggested)})</span> to take the top spot.
               </>
             )}
           </p>
@@ -210,7 +225,7 @@ export default function StakeModal({ code, onClose }: { code: string; onClose: (
           >
             {busy
               ? "Processing…"
-              : `${lb.isEmpty ? "Claim" : "Stake"} ${lb.name} — ${money(amount || suggested)}`}
+              : `${lb.isEmpty ? "Claim" : "Stake"} ${lb.name} — ${moneyBoth(amount || suggested)}`}
           </button>
           <button
             type="button"
