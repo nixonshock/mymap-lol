@@ -11,7 +11,7 @@ export default function Header({ onOpen, onClaim }: Props) {
   return (
     <div className="pointer-events-auto w-[290px]">
       {/* brand pill */}
-      <div className="inline-block rounded-full bg-white px-5 py-3 shadow-lg ring-1 ring-[#e5edf5]">
+      <div className="inline-block rounded-full bg-white px-5 py-2.5 shadow-lg ring-1 ring-[#e5edf5]">
         <div className="font-display text-[22px] font-bold leading-tight tracking-tight text-[#1f2b3e]">
           mymap.lol
         </div>
@@ -21,7 +21,7 @@ export default function Header({ onOpen, onClaim }: Props) {
       </div>
 
       {/* CTA + icon buttons */}
-      <div className="mt-3 flex items-center gap-2.5">
+      <div className="mt-1 flex items-center gap-2.5">
         <button
           type="button"
           onClick={onClaim}

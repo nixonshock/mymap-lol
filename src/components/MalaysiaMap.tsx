@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FeatureCollection } from "geojson";
-import { buildMapGeom, colorForTotal } from "@/lib/geo";
+import { buildMapGeom, colorForTotal, type MapFeature } from "@/lib/geo";
 import { useSyncExternalStore } from "react";
 import { subscribe, getVersion, allTotals, stateLeaderboard } from "@/lib/store";
 import { money, stateCodeToName } from "@/lib/states";
@@ -13,10 +13,8 @@ interface Props {
   onSelect: (code: string) => void;
 }
 
-interface FeatureWithProps {
+interface FeatureWithProps extends MapFeature {
   properties: { name: string; code: string };
-  type: string;
-  geometry: unknown;
 }
 
 interface Tf {
@@ -253,7 +251,7 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
     );
   }
 
-  const features = (geojson as FeatureCollection).features as FeatureWithProps[];
+  const features = ((geojson as FeatureCollection).features ?? []) as unknown as FeatureWithProps[];
   const vbW = Number(geom.viewBox.split(/\s+/)[2]) || 1;
 
   return (
@@ -285,7 +283,7 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
       >
         <g transform={`translate(${tf.x} ${tf.y}) scale(${tf.k})`}>
           {features.map((f) => {
-            const d = geom.path(f as never) ?? "";
+            const d = geom.path(f);
             const code = f.properties.code;
             const total = totals[code]?.total ?? 0;
             const isSel = code === selectedCode;
@@ -295,8 +293,9 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
                 key={code}
                 data-code={code}
                 d={d}
+                fillRule="evenodd"
                 fill={colorForTotal(total, maxTotal)}
-                stroke={isSel ? "#1f7a55" : isHover ? "#7aa0c8" : "#d3deea"}
+                stroke={isSel ? "#1f7a55" : isHover ? "#7aa0c8" : "#a9bccd"}
                 strokeWidth={isSel ? 1.8 : isHover ? 1.3 : 1}
                 className="cursor-pointer transition-[fill] duration-150"
                 onMouseEnter={() => setHovered(code)}

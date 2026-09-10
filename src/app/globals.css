@@ -40,14 +40,12 @@ body {
   font-family: Fredoka, ui-sans-serif, system-ui, sans-serif;
 }
 
-/* Full-bleed ocean/backdrop behind the Malaysia map */
+/* Full-bleed ocean behind the Malaysia map (worldmap.lol ocean gradient) */
 .map-stage {
   position: relative;
   height: 100dvh;
   overflow: hidden;
-  background:
-    radial-gradient(1200px 700px at 50% 28%, #dff0fb, rgba(223, 240, 251, 0)),
-    linear-gradient(180deg, #dcecf9 0%, #eaf2fa 60%, #eef6fd 100%);
+  background: radial-gradient(circle at 50% 46%, #a9d4f0 0%, #7ab4dc 65%, #5c97c4 100%);
 }
 
 ::selection {
