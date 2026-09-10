@@ -21,11 +21,12 @@ and top up the difference to take the #1 spot.
 4. **Reclaim anytime** — get passed? Just top up the difference. Your past stake
    still counts, so nothing is wasted.
 
-`Total staked` per state drives the colour: every state has its own hue (open
-states are pale, staked ones go deep and saturated). Hover shows the tooltip;
-click a state on the map, a chip, a city in the panel, or a World Order row to
-open its leaderboard + stake form. City pins on the map turn dark once a city is
-held.
+Every state is **white until it is taken** — white reads as "open for claiming".
+Once a state is claimed it takes its own colour (each state has a different hue,
+deeper and more saturated the more has been staked on it), so a coloured state is
+an owned one and no two owned states look alike. Hover shows the tooltip; click a
+state on the map, a chip, a city in the panel, or a World Order row to open its
+leaderboard + stake form. City pins on the map turn dark once a city is held.
 
 ## Making money (the model)
 

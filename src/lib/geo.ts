@@ -218,11 +218,15 @@ export function stateHue(code: string): number {
   return Math.round((stateSlot(code) * 360) / hueSlots(STATES.length) + 12) % 360;
 }
 
-/** Fill for a state: pale when open, deeper the more is staked on it. */
+/**
+ * Fill for a state: plain white while nobody holds it (white = available), then
+ * the state's own colour once it is taken — and the deeper/more saturated the
+ * colour, the more has been staked on it.
+ */
 export function stateFill(code: string, total: number, maxTotal: number): string {
+  if (total <= 0) return "#ffffff"; // open for claiming
   const h = stateHue(code);
   const lift = stateSlot(code) % 2 === 0 ? 2 : -2; // second axis of variation
-  if (total <= 0) return `hsl(${h} 52% ${lift > 0 ? 83 : 77}%)`;
   const t = Math.min(
     1,
     Math.log1p(total) / Math.log1p(Math.max(total, maxTotal, 1)),

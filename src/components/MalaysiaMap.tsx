@@ -404,9 +404,12 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
         </g>
       </svg>
 
-      {/* interaction hint */}
-      <div className="pointer-events-none absolute bottom-3 left-3 rounded-full border border-[#dfe7f0] bg-white/90 px-3 py-1.5 text-[11px] font-bold text-[#5b6b7e] shadow-lg">
-        drag to pan · scroll to zoom · click a state
+      {/* interaction hint + legend */}
+      <div className="pointer-events-none absolute bottom-3 left-3 rounded-2xl border border-[#dfe7f0] bg-white/90 px-3 py-1.5 text-[11px] font-bold text-[#5b6b7e] shadow-lg">
+        <div>drag to pan · scroll to zoom · click a state</div>
+        <div className="mt-0.5 font-semibold text-[#8494ab]">
+          white = open for claiming · coloured = already taken
+        </div>
       </div>
 
       {/* zoom controls */}
