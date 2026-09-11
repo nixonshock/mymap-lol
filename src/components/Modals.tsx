@@ -58,7 +58,8 @@ export function InfoModal({ onClose }: { onClose: () => void }) {
     { emoji: "🚩", title: "Claim", body: "Plant your flag on any open state from just $10. Your card (name, pitch, link) holds the spot." },
     { emoji: "🏙️", title: "Or a single city", body: "Stake on one city instead — it is listed in the Cities panel on the right, and it never claims the state around it. Add your own city if it isn't listed." },
     { emoji: "📈", title: "Stake to climb", body: "Your rank is your total stake on a state or a city. Out-stake the #1 to take the top spot." },
-    { emoji: "♻️", title: "Reclaim anytime", body: "Get passed? Just top up the difference — your past stake still counts, so nothing is wasted." },
+    { emoji: "🔑", title: "Your name is your entry", body: "There are no accounts — everything paid under one name adds up on one entry. Top up using the exact same name you staked with, and the same link; a different name starts a new listing. The form tells you which one you're on as you type." },
+    { emoji: "♻️", title: "Reclaim anytime", body: "Get passed? Just top up the difference — under your same name it adds to your entry, and your past stake still counts, so nothing is wasted." },
   ];
   return (
     <Shell onClose={onClose} maxW="max-w-md">

@@ -33,6 +33,30 @@ import {
 const KEY = "mymap:claims:v1";
 const CITY_KEY = "mymap:cities:v1";
 
+/**
+ * A holder's identity key: the name, trimmed, inner spaces collapsed, case-folded.
+ *
+ * There are no accounts — the NAME is the entry. Every payment made under one
+ * name adds up on one leaderboard row and one listing, which is what makes
+ * "top up only the difference" work. So "Acme Sdn Bhd" and "acme sdn bhd " must
+ * resolve to the same holder instead of two rows.
+ */
+const orgKey = (name: string) => name.trim().replace(/\s+/g, " ").toLowerCase();
+
+/** Same holder? Name matching ignores case and stray/folded whitespace. */
+export const sameOrg = (a: string, b: string) => orgKey(a) === orgKey(b);
+
+/**
+ * The row a typed name belongs to on a leaderboard, or null when it is a name
+ * nobody has staked under yet. Callers keep the STORED spelling when they write
+ * a claim, so a top-up always lands on the existing entry.
+ */
+export function findHolder(lb: StateLeaderboard, name: string): HolderRow | null {
+  const want = orgKey(name);
+  if (!want) return null;
+  return lb.holders.find((h) => orgKey(h.orgName) === want) ?? null;
+}
+
 // ---------------------------------------------------------------- local storage
 function loadLocal(): Claim[] {
   if (typeof window === "undefined") return [];
@@ -90,14 +114,17 @@ function saveCustomCities(cities: City[]) {
 
 // ---------------------------------------------------------------- aggregation
 function addToOrg(perOrg: Map<string, HolderRow>, c: Claim) {
+  // Keyed by the identity key, so the same name in different casing or spacing
+  // lands on one row (the first spelling seen is the one displayed).
+  const key = orgKey(c.orgName);
   const cur =
-    perOrg.get(c.orgName) ??
+    perOrg.get(key) ??
     ({ orgName: c.orgName, pitch: c.pitch, link: c.link, total: 0, claims: 0, isTop: false } as HolderRow);
   cur.total += c.amount;
   cur.claims += 1;
   if (c.pitch) cur.pitch = c.pitch;
   if (c.link) cur.link = c.link;
-  perOrg.set(c.orgName, cur);
+  perOrg.set(key, cur);
 }
 
 const topDown = (rows: HolderRow[]) => [...rows].sort((a, b) => b.total - a.total);
@@ -156,12 +183,13 @@ function buildLocalSnapshot(claims: Claim[]): BoardSnapshot {
 
   const claimedStates = states.filter((s) => s.count > 0);
 
-  const byOrg = new Map<string, { total: number; states: Set<string> }>();
+  const byOrg = new Map<string, { orgName: string; total: number; states: Set<string> }>();
   for (const c of paid) {
-    const cur = byOrg.get(c.orgName) ?? { total: 0, states: new Set<string>() };
+    const key = orgKey(c.orgName);
+    const cur = byOrg.get(key) ?? { orgName: c.orgName, total: 0, states: new Set<string>() };
     cur.total += c.amount;
     cur.states.add(c.cityId ?? c.stateCode);
-    byOrg.set(c.orgName, cur);
+    byOrg.set(key, cur);
   }
 
   return {
@@ -188,8 +216,8 @@ function buildLocalSnapshot(claims: Claim[]): BoardSnapshot {
       totalStaked: paid.reduce((sum, c) => sum + c.amount, 0),
       totalClaims: paid.length,
     },
-    topOrgs: [...byOrg.entries()]
-      .map(([orgName, v]) => ({ orgName, total: v.total, states: v.states.size }))
+    topOrgs: [...byOrg.values()]
+      .map((v) => ({ orgName: v.orgName, total: v.total, states: v.states.size }))
       .sort((a, b) => b.total - a.total)
       .slice(0, 20),
   };
@@ -468,7 +496,7 @@ function allHolderRows(): {
 
 /** The link a name is currently linked to (holders can stake several times). */
 export function linkForOrg(orgName: string): string | undefined {
-  return allHolderRows().find((r) => r.holder.orgName === orgName && r.holder.link)?.holder.link;
+  return allHolderRows().find((r) => sameOrg(r.holder.orgName, orgName) && r.holder.link)?.holder.link;
 }
 
 /**
@@ -490,11 +518,16 @@ export function pinBySlug(slug: string): PinProfile | null {
   if (matches.length === 0) return null;
 
   // One link can be staked by several names — the biggest spender owns the page.
-  const totals = new Map<string, number>();
-  for (const r of matches) totals.set(r.holder.orgName, (totals.get(r.holder.orgName) ?? 0) + r.holder.total);
-  const orgName = [...totals.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  const totals = new Map<string, { orgName: string; total: number }>();
+  for (const r of matches) {
+    const key = orgKey(r.holder.orgName);
+    const cur = totals.get(key) ?? { orgName: r.holder.orgName, total: 0 };
+    cur.total += r.holder.total;
+    totals.set(key, cur);
+  }
+  const orgName = [...totals.values()].sort((a, b) => b.total - a.total)[0].orgName;
 
-  const mine = matches.filter((r) => r.holder.orgName === orgName);
+  const mine = matches.filter((r) => sameOrg(r.holder.orgName, orgName));
   const territories: PinTerritory[] = mine
     .map((r) => ({
       kind: r.kind,
@@ -540,7 +573,7 @@ export function pinSnapshot(slug: string): PinProfile | null {
 /** Minimum you must pay now so that `orgName`'s total takes the #1 spot. */
 export function minimumToOvertake(lb: StateLeaderboard, orgName: string): number {
   if (lb.isEmpty) return PRICING.minClaim;
-  const mine = lb.holders.find((h) => h.orgName === orgName)?.total ?? 0;
+  const mine = findHolder(lb, orgName)?.total ?? 0;
   const leader = lb.holders[0]?.total ?? 0;
   if (mine >= leader) return PRICING.minClaim; // already #1 → any add keeps it
   return leader - mine + PRICING.minToOvertake;

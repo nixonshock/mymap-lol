@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import {
   subscribe,
@@ -8,6 +8,8 @@ import {
   cityLeaderboard,
   stateLeaderboard,
   minimumToOvertake,
+  findHolder,
+  sameOrg,
   applyPaidClaim,
 } from "@/lib/store";
 import { checkout } from "@/lib/checkout";
@@ -38,29 +40,40 @@ export default function StakeModal({
   const where = target.kind === "city" ? `${target.name} · ${stateCodeToName(target.stateCode)}` : stateCodeToName(target.code);
 
   const [form, setForm] = useState(EMPTY_FORM);
-  const [amount, setAmount] = useState<number>(0);
+  const [amountInput, setAmountInput] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [opening, setOpening] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   // worldmap.lol's two listing modes: a product website, or a social profile.
   const [mode, setMode] = useState<ListingMode>("site");
 
-  const orgTotal = useMemo(
-    () => lb.holders.find((h) => h.orgName === form.orgName.trim())?.total ?? 0,
-    [lb, form.orgName],
-  );
+  // The NAME is the entry (there are no accounts), so a typed name that matches
+  // an existing holder — case/space-insensitively — tops that entry up instead
+  // of starting a second listing. `mine` is that match.
+  const mine = useMemo(() => findHolder(lb, form.orgName), [lb, form.orgName]);
+  const orgTotal = mine?.total ?? 0;
   const suggested = useMemo(() => minimumToOvertake(lb, form.orgName.trim()), [lb, form.orgName]);
-  const isTopForMe = orgTotal > 0 && lb.holders[0]?.orgName === form.orgName.trim();
+  /**
+   * The amount follows the suggestion until the visitor edits the box — then
+   * their number wins. Following it matters for the top-up promise: typing the
+   * name you already hold drops the box straight to the difference you owe
+   * ($30 to retake #1), instead of leaving a stale figure in the way.
+   */
+  const amountFollows = amountInput === null || amountInput.trim() === "";
+  const amount = amountFollows ? suggested : Math.max(0, Math.floor(Number(amountInput) || 0));
+  const isTopForMe = orgTotal > 0 && sameOrg(lb.holders[0]?.orgName ?? "", form.orgName);
 
   // The stored link is the domain only (site) or the canonical profile URL
   // (social), so the same listing always tops up instead of duplicating.
   const normalized = useMemo(() => normalizeLink(form.link, mode), [form.link, mode]);
   /** Typed name wins; otherwise the link names the listing ("acme.com" / "@handle"). */
   const displayName = form.orgName.trim() || normalized.display || "";
-
-  useEffect(() => {
-    setAmount((a) => (a <= 0 ? suggested : Math.max(a, suggested)));
-  }, [suggested]);
+  /**
+   * What actually gets sent: when the typed name matches an existing holder we
+   * send THEIR stored spelling, so the payment always lands on the same entry
+   * even if this visitor capitalised it differently.
+   */
+  const claimName = mine?.orgName || displayName;
 
   const isInvalid = !displayName || !form.pitch.trim() || amount < 1 || Boolean(normalized.error);
 
@@ -72,7 +85,7 @@ export default function StakeModal({
         stateCode,
         cityId: cityTarget?.id,
         cityName: cityTarget?.name,
-        orgName: displayName,
+        orgName: claimName,
         pitch: form.pitch.trim(),
         link: normalized.href ?? undefined,
         amount,
@@ -103,6 +116,7 @@ export default function StakeModal({
           message: `${money(amount)} staked on ${lb.name}. You're now a holder!`,
         });
         setForm(EMPTY_FORM);
+        setAmountInput(null);
       } else {
         setResult({ ok: false, message: pay.message });
       }
@@ -139,7 +153,9 @@ export default function StakeModal({
             </div>
             <p className="mt-2 max-w-[46ch] text-[12.5px] font-semibold leading-relaxed text-[#8494ab]">
               Your rank is your total stake on this {isCity ? "city" : "state"}. Top up anytime —
-              reclaiming #1 only costs the difference, your past stake still counts.
+              reclaiming #1 only costs the difference, your past stake still counts.{" "}
+              <span className="text-[#1f2b3e]">Your name is your entry:</span> stake under the same
+              name to add to it, a different name starts a new one.
             </p>
             {cityTarget && (
               <div className="mt-1 text-[11.5px] font-semibold text-[#8494ab]">
@@ -231,6 +247,21 @@ export default function StakeModal({
               placeholder={mode === "social" ? "Name (optional — defaults to the @handle)" : "Organization name (optional)"}
               className="w-full rounded-xl border border-[#dfe7f0] bg-[#fbfdff] px-3.5 py-2.5 text-[13px] font-semibold text-[#1f2b3e] outline-none transition focus:border-[#b9cde0]"
             />
+            {/* Live recognition: proves the name IS the entry, so a top-up is
+                visibly an add-to, not a second listing. */}
+            {form.orgName.trim() && (
+              <div
+                className={`px-1 text-[11px] font-semibold leading-relaxed ${
+                  mine ? "text-[#1f7a55]" : "text-[#8494ab]"
+                }`}
+              >
+                {mine
+                  ? `✓ Recognised ${mine.orgName} — this payment adds to their ${money(mine.total)} here, it does not start a new entry.`
+                  : lb.isEmpty
+                    ? "New entry — first to claim here. Keep this exact name to top up later."
+                    : `New entry — nobody here has staked as ${form.orgName.trim()}. Reuse the exact name you staked with to top up instead.`}
+              </div>
+            )}
             <input
               value={form.pitch}
               onChange={(e) => setForm({ ...form, pitch: e.target.value })}
@@ -292,15 +323,29 @@ export default function StakeModal({
               <input
                 type="number"
                 min={1}
-                value={amount || ""}
-                onChange={(e) => setAmount(Math.max(0, Number(e.target.value)))}
+                value={amountFollows ? String(suggested) : amountInput ?? ""}
+                onChange={(e) => setAmountInput(e.target.value)}
                 placeholder={String(suggested)}
                 className="w-full rounded-xl border border-[#dfe7f0] bg-[#fbfdff] px-3.5 py-2.5 text-[13px] font-semibold text-[#1f2b3e] outline-none transition focus:border-[#b9cde0]"
               />
               <span className="shrink-0 text-[12px] font-bold text-[#8494ab]">USD</span>
             </div>
-            <div className="text-right text-[11px] font-semibold text-[#8494ab]">
-              charged as {money(amount || suggested)} · {moneyMyr(amount || suggested)}
+            <div className="flex items-center justify-between gap-3 text-[11px] font-semibold text-[#8494ab]">
+              <span>
+                charged as {money(amount)} · {moneyMyr(amount)}
+              </span>
+              {/* Edited away from the suggestion? One tap puts back the exact
+                  amount that takes #1 (or the $10 floor when already #1). */}
+              {!amountFollows && amount !== suggested && (
+                <button
+                  type="button"
+                  onClick={() => setAmountInput(null)}
+                  className="shrink-0 underline decoration-dotted underline-offset-2 transition hover:text-[#1f7a55]"
+                >
+                  use {money(suggested)}
+                  {isTopForMe ? "" : " — takes #1"}
+                </button>
+              )}
             </div>
           </div>
 
