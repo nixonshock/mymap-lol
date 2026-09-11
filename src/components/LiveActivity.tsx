@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useSyncExternalStore } from "react";
-import { subscribe, getVersion, recentClaims } from "@/lib/store";
+import Link from "next/link";
+import { subscribe, getVersion, linkForOrg, recentClaims } from "@/lib/store";
+import { pinHref } from "@/lib/links";
 import { money } from "@/lib/states";
 import type { StakeTarget } from "@/lib/types";
 
@@ -47,11 +49,19 @@ export default function LiveActivity({ onPick, onClose }: Props) {
               ? { kind: "city", id: it.cityId, name: it.cityName || it.cityId, stateCode: it.stateCode }
               : { kind: "state", code: it.stateCode };
             return (
-              <button
+              <div
                 key={`${it.stateCode}-${it.cityId ?? ""}-${i}`}
-                type="button"
+                role="button"
+                tabIndex={0}
+                aria-label={`Stake on ${it.cityName || it.stateName}`}
                 onClick={() => onPick(target)}
-                className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition hover:bg-[#f2f7fc]"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onPick(target);
+                  }
+                }}
+                className="flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition hover:bg-[#f2f7fc]"
               >
                 <span
                   className={`h-2.5 w-2.5 shrink-0 rounded-full ${
@@ -59,15 +69,23 @@ export default function LiveActivity({ onPick, onClose }: Props) {
                   }`}
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[12px] font-bold text-[#1f2b3e]">
-                    {it.orgName} · {money(it.amount)}
+                  <div className="flex items-baseline gap-1 truncate text-[12px] font-bold text-[#1f2b3e]">
+                    <Link
+                      href={pinHref(it.orgName, linkForOrg(it.orgName))}
+                      onClick={(e) => e.stopPropagation()}
+                      title={`${it.orgName} — listing page`}
+                      className="truncate text-[#1f7a55] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
+                    >
+                      {it.orgName}
+                    </Link>
+                    <span className="shrink-0 text-[#8494ab]">· {money(it.amount)}</span>
                   </div>
                   <div className="truncate text-[11px] font-semibold text-[#8494ab]">
                     {it.cityId ? `${it.cityName || it.cityId} · ${it.stateName}` : it.stateName} · {fmt(it.at)}
                   </div>
                 </div>
                 <span className="shrink-0 text-[12px] text-[#8494ab]">→</span>
-              </button>
+              </div>
             );
           })
         )}

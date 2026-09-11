@@ -1,5 +1,6 @@
 import type { Claim, HolderRow, StateLeaderboard, StakeResult } from "./types";
 import { PRICING, STATES, stateCodeToName } from "./states";
+import { nameSlug, slugOf } from "./links";
 import { CITIES, cityId, type City } from "./cities";
 import {
   emptySnapshot,
@@ -207,6 +208,7 @@ const listeners = new Set<() => void>();
 
 function emit() {
   version++;
+  pinCache = null;
   listeners.forEach((l) => l());
 }
 
@@ -404,6 +406,135 @@ export function worldOrder(n = 10) {
 
 export function globalTopOrgs(n = 10) {
   return snapshot.topOrgs.slice(0, n);
+}
+
+/* ------------------------------------------------------- bidder profile (pin) */
+
+/** A place a bidder holds — a state or a city inside one. */
+export interface PinTerritory {
+  kind: "state" | "city";
+  /** state code, or city id */
+  code: string;
+  name: string;
+  /** "Pahang" for a city, empty for a state */
+  sub: string;
+  rank: number;
+  total: number;
+  claims: number;
+  isTop: boolean;
+}
+
+export interface PinProfile {
+  slug: string;
+  orgName: string;
+  link?: string;
+  pitch: string;
+  /** total staked across every territory */
+  total: number;
+  /** how many payments make it up */
+  placements: number;
+  /** territories where this name holds #1 */
+  crowns: number;
+  territories: PinTerritory[];
+}
+
+/** Every holder row on the board flattened, with its rank and place name. */
+function allHolderRows(): {
+  holder: BoardHolder;
+  kind: "state" | "city";
+  code: string;
+  name: string;
+  sub: string;
+  rank: number;
+}[] {
+  const rows: {
+    holder: BoardHolder;
+    kind: "state" | "city";
+    code: string;
+    name: string;
+    sub: string;
+    rank: number;
+  }[] = [];
+  for (const s of snapshot.states) {
+    s.holders.forEach((h, i) => rows.push({ holder: h, kind: "state", code: s.code, name: s.name, sub: "", rank: i + 1 }));
+  }
+  for (const c of snapshot.cities) {
+    c.holders.forEach((h, i) =>
+      rows.push({ holder: h, kind: "city", code: c.id, name: c.name, sub: c.stateName, rank: i + 1 }),
+    );
+  }
+  return rows;
+}
+
+/** The link a name is currently linked to (holders can stake several times). */
+export function linkForOrg(orgName: string): string | undefined {
+  return allHolderRows().find((r) => r.holder.orgName === orgName && r.holder.link)?.holder.link;
+}
+
+/**
+ * The public profile behind /pin/<slug>.
+ *
+ * A listing is identified by its link (worldmap.lol's rule — "there are no
+ * accounts, your listing is identified by its link"). Slugs that aren't a link
+ * fall back to the holder name, so a demo board without links still has pages.
+ */
+export function pinBySlug(slug: string): PinProfile | null {
+  const want = slug.trim().toLowerCase();
+  if (!want) return null;
+
+  const rows = allHolderRows();
+  let matches = rows.filter((r) => slugOf(r.holder.link) === want);
+  if (matches.length === 0) {
+    matches = rows.filter((r) => nameSlug(r.holder.orgName) === want);
+  }
+  if (matches.length === 0) return null;
+
+  // One link can be staked by several names — the biggest spender owns the page.
+  const totals = new Map<string, number>();
+  for (const r of matches) totals.set(r.holder.orgName, (totals.get(r.holder.orgName) ?? 0) + r.holder.total);
+  const orgName = [...totals.entries()].sort((a, b) => b[1] - a[1])[0][0];
+
+  const mine = matches.filter((r) => r.holder.orgName === orgName);
+  const territories: PinTerritory[] = mine
+    .map((r) => ({
+      kind: r.kind,
+      code: r.code,
+      name: r.name,
+      sub: r.sub,
+      rank: r.rank,
+      total: r.holder.total,
+      claims: r.holder.claims,
+      isTop: r.rank === 1,
+    }))
+    .sort((a, b) => b.total - a.total);
+
+  const withLink = mine.find((r) => r.holder.link);
+  const withPitch = mine.find((r) => r.holder.pitch);
+
+  return {
+    slug: want,
+    orgName,
+    link: withLink?.holder.link,
+    pitch: withPitch?.holder.pitch ?? "",
+    total: territories.reduce((sum, t) => sum + t.total, 0),
+    placements: territories.reduce((sum, t) => sum + t.claims, 0),
+    crowns: territories.filter((t) => t.isTop).length,
+    territories,
+  };
+}
+
+/** Last profile we built, kept stable so useSyncExternalStore doesn't loop. */
+let pinCache: { slug: string; at: number; value: PinProfile | null } | null = null;
+
+/**
+ * `pinBySlug`, but referentially stable for a given (slug, board version) —
+ * what `useSyncExternalStore` in the profile page needs.
+ */
+export function pinSnapshot(slug: string): PinProfile | null {
+  if (pinCache && pinCache.slug === slug && pinCache.at === version) return pinCache.value;
+  const value = pinBySlug(slug);
+  pinCache = { slug, at: version, value };
+  return value;
 }
 
 /** Minimum you must pay now so that `orgName`'s total takes the #1 spot. */

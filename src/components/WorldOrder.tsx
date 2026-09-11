@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 import { subscribe, getVersion, worldOrder, openStateCount } from "@/lib/store";
+import { pinHref } from "@/lib/links";
 import { money } from "@/lib/states";
 
 interface Props {
@@ -73,14 +75,23 @@ export default function WorldOrder({ onPick, onClose }: Props) {
           list.map((s, i) => {
             const top = i === 0;
             return (
-              <button
+              <div
                 key={s.code}
-                type="button"
+                role="button"
+                tabIndex={0}
+                aria-label={`Stake on ${s.name}`}
                 onClick={() => {
                   setExpanded(false);
                   onPick(s.code);
                 }}
-                className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition ${
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setExpanded(false);
+                    onPick(s.code);
+                  }
+                }}
+                className={`flex w-full cursor-pointer items-center gap-3 rounded-2xl px-3 py-2 text-left transition ${
                   top ? "bg-[#fff7e0] ring-1 ring-[#ffe3a1]" : "bg-[#f2f7fc] hover:bg-[#e9f1f9]"
                 }`}
               >
@@ -99,7 +110,15 @@ export default function WorldOrder({ onPick, onClose }: Props) {
                   <div className="truncate text-[11px] font-semibold text-[#8494ab]">
                     {s.leader ? (
                       <>
-                        <span className="font-extrabold text-[#1f7a55]">{s.leader}</span>
+                        {/* the bidder's name opens their listing page (link preview) */}
+                        <Link
+                          href={pinHref(s.leader, s.leaderLink)}
+                          onClick={(e) => e.stopPropagation()}
+                          title={`${s.leader} — listing page`}
+                          className="font-extrabold text-[#1f7a55] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
+                        >
+                          {s.leader}
+                        </Link>
                         <span className="text-[#b0bed0]"> · </span>
                       </>
                     ) : null}
@@ -109,7 +128,7 @@ export default function WorldOrder({ onPick, onClose }: Props) {
                 <div className="shrink-0 text-[14px] font-extrabold tabular-nums text-[#1f7a55]">
                   {money(s.total)}
                 </div>
-              </button>
+              </div>
             );
           })
         )}

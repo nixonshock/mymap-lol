@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 import { STATES, money, stateCodeToName } from "@/lib/states";
 import { subscribe, getVersion, addCity, allCities, cityTotals, topHolderForCity } from "@/lib/store";
-import { linkLabel, safeHref } from "@/lib/links";
+import { linkLabel, pinHref, safeHref } from "@/lib/links";
 import type { City } from "@/lib/cities";
 import type { StakeTarget } from "@/lib/types";
 
@@ -196,7 +197,14 @@ function CityRow({
         </span>
         {total > 0 && holder && (
           <span className="mt-0.5 flex items-baseline gap-1.5">
-            <span className="truncate text-[11px] font-extrabold text-[#1f7a55]">{holder.orgName}</span>
+            <Link
+              href={pinHref(holder.orgName, holder.link)}
+              onClick={(e) => e.stopPropagation()}
+              title={`${holder.orgName} — listing page`}
+              className="truncate text-[11px] font-extrabold text-[#1f7a55] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
+            >
+              {holder.orgName}
+            </Link>
             {site && (
               <span className="truncate text-[10.5px] font-semibold text-[#8494ab]">· {site}</span>
             )}

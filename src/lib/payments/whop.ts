@@ -13,7 +13,9 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  *   WHOP_API_KEY           account API key (Dashboard > Settings > API keys)
  *   WHOP_COMPANY_ID        biz_…  — the account the money lands in
  *   WHOP_PRODUCT_ID        prod_… — the product the per-stake plans hang off
- *   WHOP_CURRENCY          myr (default) | usd | … base currency of the plan
+ *   WHOP_CURRENCY          usd (default) | myr | … base currency of the plan.
+ *                          Keep it usd: the card is charged US dollars and the
+ *                          ringgit figure on the site is only a display conversion.
  *   WHOP_ADAPTIVE_PRICING  "true" → Whop shows the buyer's local currency
  *   WHOP_USD_MYR           rate used when the plan currency is MYR (default 4.04)
  *   WHOP_SANDBOX           "true" → sandbox-api.whop.com
@@ -24,7 +26,7 @@ const PROD_API = "https://api.whop.com/api/v1";
 const SANDBOX_API = "https://sandbox-api.whop.com/api/v1";
 
 export const whopApiBase = () => (process.env.WHOP_SANDBOX === "true" ? SANDBOX_API : PROD_API);
-export const whopCurrency = () => (process.env.WHOP_CURRENCY ?? "myr").toLowerCase();
+export const whopCurrency = () => (process.env.WHOP_CURRENCY ?? "usd").toLowerCase();
 
 export function whopConfigured(): boolean {
   return Boolean(
@@ -38,7 +40,13 @@ export function usdMyrRate(): number {
   return Number.isFinite(raw) && raw > 0 ? raw : 4.04;
 }
 
-/** What the buyer is actually charged, in the plan's currency (major units). */
+/**
+ * What the buyer is actually charged, in the plan's currency.
+ *
+ * With the default `usd`, this is simply the dollar amount the site showed —
+ * the price is quoted in US dollars and the card is charged in US dollars, and
+ * the "≈ RM…" figure next to it is a display conversion only.
+ */
 export function whopChargeAmount(amountUsd: number): number {
   return whopCurrency() === "myr" ? Math.round(amountUsd * usdMyrRate()) : amountUsd;
 }

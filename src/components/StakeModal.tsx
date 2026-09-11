@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 import {
   subscribe,
   getVersion,
@@ -10,7 +11,7 @@ import {
   applyPaidClaim,
 } from "@/lib/store";
 import { checkout } from "@/lib/checkout";
-import { linkLabel, safeHref } from "@/lib/links";
+import { SOCIAL_HINT, linkLabel, normalizeLink, outboundHref, pinHref, safeHref, type ListingMode } from "@/lib/links";
 import { PRICING, money, moneyBoth, moneyMyr, stateCodeToName } from "@/lib/states";
 import type { StateLeaderboard, StakeTarget } from "@/lib/types";
 
@@ -41,6 +42,8 @@ export default function StakeModal({
   const [busy, setBusy] = useState(false);
   const [opening, setOpening] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  // worldmap.lol's two listing modes: a product website, or a social profile.
+  const [mode, setMode] = useState<ListingMode>("site");
 
   const orgTotal = useMemo(
     () => lb.holders.find((h) => h.orgName === form.orgName.trim())?.total ?? 0,
@@ -49,11 +52,17 @@ export default function StakeModal({
   const suggested = useMemo(() => minimumToOvertake(lb, form.orgName.trim()), [lb, form.orgName]);
   const isTopForMe = orgTotal > 0 && lb.holders[0]?.orgName === form.orgName.trim();
 
+  // The stored link is the domain only (site) or the canonical profile URL
+  // (social), so the same listing always tops up instead of duplicating.
+  const normalized = useMemo(() => normalizeLink(form.link, mode), [form.link, mode]);
+  /** Typed name wins; otherwise the link names the listing ("acme.com" / "@handle"). */
+  const displayName = form.orgName.trim() || normalized.display || "";
+
   useEffect(() => {
     setAmount((a) => (a <= 0 ? suggested : Math.max(a, suggested)));
   }, [suggested]);
 
-  const isInvalid = !form.orgName.trim() || !form.pitch.trim() || amount < 1;
+  const isInvalid = !displayName || !form.pitch.trim() || amount < 1 || Boolean(normalized.error);
 
   async function submit() {
     setBusy(true);
@@ -63,9 +72,9 @@ export default function StakeModal({
         stateCode,
         cityId: cityTarget?.id,
         cityName: cityTarget?.name,
-        orgName: form.orgName.trim(),
+        orgName: displayName,
         pitch: form.pitch.trim(),
-        link: form.link.trim() || undefined,
+        link: normalized.href ?? undefined,
         amount,
       };
 
@@ -177,23 +186,28 @@ export default function StakeModal({
                     </span>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1 truncate text-[13px] font-bold text-[#1f2b3e]">
-                        {(() => {
-                          const href = safeHref(h.link);
-                          return href ? (
-                            <a
-                              href={href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              title={href}
-                              className="truncate text-[#166d4a] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
-                            >
-                              {h.orgName}
-                            </a>
-                          ) : (
-                            <span className="truncate">{h.orgName}</span>
-                          );
-                        })()}
+                        {/* the name opens the bidder's listing page (their link preview) */}
+                        <Link
+                          href={pinHref(h.orgName, h.link)}
+                          onClick={(e) => e.stopPropagation()}
+                          title={`${h.orgName} — listing page`}
+                          className="truncate text-[#166d4a] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
+                        >
+                          {h.orgName}
+                        </Link>
+                        {safeHref(h.link) && (
+                          <a
+                            href={outboundHref(h.link) ?? undefined}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label={`Open ${h.orgName}'s site`}
+                            title={safeHref(h.link) ?? undefined}
+                            className="shrink-0 text-[10.5px] font-bold text-[#8494ab] transition hover:text-[#1f7a55]"
+                          >
+                            ↗
+                          </a>
+                        )}
                         {i === 0 && <span aria-label="top holder">👑</span>}
                       </div>
                       <div className="truncate text-[11px] font-semibold text-[#8494ab]">
@@ -214,7 +228,7 @@ export default function StakeModal({
             <input
               value={form.orgName}
               onChange={(e) => setForm({ ...form, orgName: e.target.value })}
-              placeholder="Organization name"
+              placeholder={mode === "social" ? "Name (optional — defaults to the @handle)" : "Organization name (optional)"}
               className="w-full rounded-xl border border-[#dfe7f0] bg-[#fbfdff] px-3.5 py-2.5 text-[13px] font-semibold text-[#1f2b3e] outline-none transition focus:border-[#b9cde0]"
             />
             <input
@@ -223,12 +237,50 @@ export default function StakeModal({
               placeholder="One-line pitch (e.g. Fintech • HQ in KL)"
               className="w-full rounded-xl border border-[#dfe7f0] bg-[#fbfdff] px-3.5 py-2.5 text-[13px] font-semibold text-[#1f2b3e] outline-none transition focus:border-[#b9cde0]"
             />
+
+            {/* listing mode — worldmap.lol's 🌐 Product URL / @ Social profile tabs */}
+            <div className="flex items-center gap-1.5 rounded-full bg-[#f2f7fc] p-1 ring-1 ring-[#e5edf5]">
+              {(
+                [
+                  { key: "site", label: "🌐 Website" },
+                  { key: "social", label: "@ Social profile" },
+                ] as const
+              ).map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  aria-pressed={mode === t.key}
+                  onClick={() => setMode(t.key)}
+                  className={`flex-1 rounded-full px-3 py-1.5 text-[12px] font-extrabold transition ${
+                    mode === t.key ? "bg-white text-[#1f2b3e] shadow-sm" : "text-[#8494ab] hover:text-[#1f2b3e]"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
             <input
               value={form.link}
               onChange={(e) => setForm({ ...form, link: e.target.value })}
-              placeholder="Website (optional)"
-              className="w-full rounded-xl border border-[#dfe7f0] bg-[#fbfdff] px-3.5 py-2.5 text-[13px] font-semibold text-[#1f2b3e] outline-none transition focus:border-[#b9cde0]"
+              placeholder={mode === "social" ? "x.com/yourhandle" : "yourstartup.com"}
+              className={`w-full rounded-xl border bg-[#fbfdff] px-3.5 py-2.5 text-[13px] font-semibold text-[#1f2b3e] outline-none transition focus:border-[#b9cde0] ${
+                normalized.error ? "border-[#e8b4b4]" : "border-[#dfe7f0]"
+              }`}
             />
+            {mode === "social" && !normalized.error && (
+              <div className="text-[11px] font-semibold text-[#8494ab]">{SOCIAL_HINT}</div>
+            )}
+            {normalized.error ? (
+              <div className="text-[11px] font-bold text-[#c0392b]">{normalized.error}</div>
+            ) : (
+              !form.orgName.trim() &&
+              normalized.display && (
+                <div className="text-[11px] font-semibold text-[#8494ab]">
+                  Listed as <span className="font-extrabold text-[#1f7a55]">{normalized.display}</span>
+                </div>
+              )
+            )}
+
             <input
               type="email"
               value={form.email}
@@ -246,6 +298,9 @@ export default function StakeModal({
                 className="w-full rounded-xl border border-[#dfe7f0] bg-[#fbfdff] px-3.5 py-2.5 text-[13px] font-semibold text-[#1f2b3e] outline-none transition focus:border-[#b9cde0]"
               />
               <span className="shrink-0 text-[12px] font-bold text-[#8494ab]">USD</span>
+            </div>
+            <div className="text-right text-[11px] font-semibold text-[#8494ab]">
+              charged as {money(amount || suggested)} · {moneyMyr(amount || suggested)}
             </div>
           </div>
 

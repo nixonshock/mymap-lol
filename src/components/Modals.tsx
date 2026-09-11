@@ -1,8 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { STATES, money } from "@/lib/states";
-import { globalTopOrgs } from "@/lib/store";
+import { globalTopOrgs, linkForOrg } from "@/lib/store";
+import { pinHref } from "@/lib/links";
+import { Favicon } from "@/components/LinkPreview";
 
 /** Shared modal shell (worldmap.lol style: dimmed overlay + white rounded card). */
 function Shell({
@@ -128,7 +131,17 @@ export function BoardModal({ onClose }: { onClose: () => void }) {
                   >
                     {i + 1}
                   </span>
-                  <div className="truncate text-[13px] font-bold text-[#1f2b3e]">{o.orgName}</div>
+                  <Favicon link={linkForOrg(o.orgName)} />
+                  <Link
+                    href={pinHref(o.orgName, linkForOrg(o.orgName))}
+                    title={`${o.orgName} — listing page`}
+                    className="truncate text-[13px] font-bold text-[#1f2b3e] underline decoration-[#dfe7f0] underline-offset-2 transition hover:text-[#166d4a]"
+                  >
+                    {o.orgName}
+                  </Link>
+                  <span className="shrink-0 text-[10.5px] font-bold text-[#8494ab]">
+                    {o.states} {o.states === 1 ? "state" : "states"}
+                  </span>
                 </div>
                 <div className="shrink-0 text-[13px] font-extrabold tabular-nums text-[#1f7a55]">
                   {money(o.total)}

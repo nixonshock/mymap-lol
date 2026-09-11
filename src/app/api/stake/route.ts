@@ -165,9 +165,10 @@ export async function POST(req: NextRequest) {
     ? `${cityName} · ${stateCodeToName(stateCode)}`
     : stateCodeToName(stateCode);
 
-  // The amount the buyer is actually charged, in the plan's currency. With
-  // WHOP_CURRENCY=myr the dollar figure the UI showed is converted at the same
-  // rate the UI quotes, so "$10" is charged as the RM40 the buyer was shown.
+  // The amount the buyer is actually charged, in the plan's currency. With the
+  // default WHOP_CURRENCY=usd the plan is denominated in dollars, so a "$32"
+  // stake charges $32 — the "≈ RM129" the UI showed beside it is the display
+  // conversion (NEXT_PUBLIC_USD_MYR), not a charge in ringgit.
   const chargeMajor = whopChargeAmount(amountUsd);
   const currency = whopCurrency().toUpperCase();
   const chargeCents = chargeMajor * 100;

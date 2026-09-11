@@ -67,13 +67,20 @@ NEXT_PUBLIC_PAYMENT_MODE=live
 WHOP_API_KEY=            # Dashboard > Settings > API keys (account key)
 WHOP_COMPANY_ID=biz_     # the account the money lands in
 WHOP_PRODUCT_ID=prod_    # the product the per-stake plans hang off
-WHOP_CURRENCY=myr        # base currency of the plan (usd = worldmap's own setup)
-WHOP_USD_MYR=4.04        # rate used to turn the site's $ figures into MYR charges
+WHOP_CURRENCY=usd        # plan currency — usd charges the card in dollars
+WHOP_USD_MYR=4.04        # display-only rate for the "≈ RM…" next to every price
 WHOP_ADAPTIVE_PRICING=false  # true → Whop shows the buyer's local currency
 WHOP_WEBHOOK_SECRET=ws_  # verifies inbound webhooks (Standard Webhooks HMAC)
 WHOP_SANDBOX=true        # optional: hit sandbox-api.whop.com while testing
 WHOP_SUPPORT_EMAIL=      # optional: shown on the checkout ("contact … first")
 ```
+
+**Currency:** the site quotes dollars and shows the ringgit equivalent next to
+every price (`$10 ≈ RM40`, `NEXT_PUBLIC_USD_MYR`). The plan is created in **USD**,
+so the buyer's card is charged US dollars — the RM figure is a conversion shown
+for local shoppers, not a charge. (Worldmap.lol does the same: "payments are
+whole US dollars".) Setting `WHOP_CURRENCY=myr` instead charges ringgit at
+`WHOP_USD_MYR` if that's ever wanted.
 
 Point a Whop webhook at `https://www.mymap.lol/api/whop/webhook` for
 `payment.succeeded` (+ `payment.failed`), and paste its signing secret into
