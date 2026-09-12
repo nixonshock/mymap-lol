@@ -8,7 +8,8 @@ import LiveActivity from "@/components/LiveActivity";
 import CitiesPanel from "@/components/CitiesPanel";
 import StakeModal from "@/components/StakeModal";
 import { BoardModal, InfoModal, SearchModal } from "@/components/Modals";
-import { applySandboxReturn, startBoardSync } from "@/lib/store";
+import PaymentCelebration from "@/components/PaymentCelebration";
+import { consumePaidReturn, startBoardSync, type PaidReturn } from "@/lib/store";
 import type { StakeTarget } from "@/lib/types";
 
 /** Desktop shell: left rail (brand → live activity → world order), the map
@@ -19,13 +20,14 @@ export default function Home() {
   const [target, setTarget] = useState<StakeTarget | null>(null);
   const [modal, setModal] = useState<"info" | "board" | "search" | null>(null);
   const [sheet, setSheet] = useState<"order" | "cities" | null>(null);
+  /** set when we just came back from a paid checkout — drives the celebration */
+  const [paid, setPaid] = useState<PaidReturn | null>(null);
 
   // Poll the shared board (no-op while the backend is unconfigured).
   useEffect(() => {
-    // Sandbox test mode: a returning Whop payment lands with ?paid=… on the URL,
-    // which mirrors that stake into this browser's board (there is no database
-    // to remember it yet).
-    applySandboxReturn();
+    // Coming back from Whop: consume ?paid=… (which also mirrors the stake into
+    // this browser's board while there is no database) and celebrate it.
+    setPaid(consumePaidReturn());
     startBoardSync();
   }, []);
 
@@ -113,6 +115,9 @@ export default function Home() {
       {modal === "info" && <InfoModal onClose={() => setModal(null)} />}
       {modal === "board" && <BoardModal onClose={() => setModal(null)} />}
       {modal === "search" && <SearchModal onClose={() => setModal(null)} onPick={pickState} />}
+
+      {/* payment received */}
+      {paid && <PaymentCelebration facts={paid} onClose={() => setPaid(null)} />}
     </div>
   );
 }

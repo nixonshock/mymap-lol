@@ -1,6 +1,6 @@
 import type { Claim, HolderRow, StateLeaderboard, StakeResult } from "./types";
 import { PRICING, STATES, stateCodeToName } from "./states";
-import { nameSlug, slugOf } from "./links";
+import { nameSlug, pinHref, slugOf } from "./links";
 import { CITIES, cityId, type City } from "./cities";
 import {
   emptySnapshot,
@@ -650,60 +650,80 @@ export async function applyPaidClaim(
   };
 }
 
+/** The stake facts Whop hands back on the return URL after a payment. */
+export interface PaidReturn {
+  stateCode: string;
+  stateName: string;
+  orgName: string;
+  amount: number;
+  cityName?: string;
+  /** the holder's public listing, for the "see my listing" button */
+  href: string;
+}
+
 /**
- * Sandbox test mode: Whop sends the buyer back with the stake facts on the URL
- * (`?paid=…&state=…&org=…&amount=…`), and with no database yet nothing else
- * knows the payment happened — so mirror it into this browser's local board and
- * the state colours in. Returns true when a stake was added.
+ * Consume a returning paid checkout: Whop sends the buyer back with the stake on
+ * the URL (`?paid=…&state=…&org=…&amount=…`).
  *
- * Ignored once the shared board is live: there the claim row exists and the
- * webhook is what marks it paid.
+ * With no database yet the stake is also mirrored into this browser's board, so
+ * the state colours in straight away — skipped once the shared board is live,
+ * where the claim row exists and the webhook is what marks it paid. Either way
+ * the params are consumed here and the facts come back so the page can celebrate
+ * the payment.
  */
-export function applySandboxReturn(): boolean {
-  if (typeof window === "undefined" || isLive()) return false;
+export function consumePaidReturn(): PaidReturn | null {
+  if (typeof window === "undefined") return null;
 
   const params = new URLSearchParams(window.location.search);
   const paid = params.get("paid");
   const stateCode = (params.get("state") ?? "").toUpperCase();
-  if (!paid || paid.length > 80) return false;
-  if (!STATES.some((s) => s.code === stateCode)) return false;
+  if (!paid || paid.length > 80) return null;
+  if (!STATES.some((s) => s.code === stateCode)) return null;
 
-  const id = `sbx_${paid}`;
   // Drop the return params so a refresh, a back-navigation or a shared link
   // can't replay them (also keeps the address bar clean).
-  const strip = () => {
-    try {
-      window.history.replaceState(null, "", window.location.pathname + window.location.hash);
-    } catch {
-      /* history unavailable — the id check below still stops a double-add */
-    }
-  };
-
-  if (localClaims.some((c) => c.id === id)) {
-    strip();
-    return false;
+  try {
+    window.history.replaceState(null, "", window.location.pathname + window.location.hash);
+  } catch {
+    /* history unavailable — the id check below still stops a double-add */
   }
 
   const rawCity = params.get("city") ?? "";
-  const city = rawCity && rawCity.startsWith(stateCode.toLowerCase() + ":") ? rawCity : undefined;
-  const amount = Math.round(Number(params.get("amount")) || 0);
-  const claim: Claim = {
-    id,
-    stateCode,
-    cityId: city,
-    cityName: city ? (params.get("cityname") ?? "").slice(0, 60) || undefined : undefined,
-    orgName: (params.get("org") ?? "").slice(0, 60) || "Sandbox stake",
-    pitch: (params.get("pitch") ?? "").slice(0, 140),
-    link: params.get("link") ?? undefined,
-    amount: amount >= PRICING.minClaim ? amount : PRICING.minClaim,
-    at: Date.now(),
-    status: "paid",
-  };
+  const cityIdValue = rawCity.startsWith(stateCode.toLowerCase() + ":") ? rawCity : undefined;
+  const cityName = cityIdValue ? (params.get("cityname") ?? "").slice(0, 60) || undefined : undefined;
+  const orgName = (params.get("org") ?? "").slice(0, 60) || "Sandbox stake";
+  const link = params.get("link") ?? undefined;
+  const rawAmount = Math.round(Number(params.get("amount")) || 0);
+  const amount = rawAmount >= PRICING.minClaim ? rawAmount : PRICING.minClaim;
 
-  localClaims = [...localClaims, claim];
-  saveLocal(localClaims);
-  snapshot = buildLocalSnapshot(localClaims);
-  emit();
-  strip();
-  return true;
+  if (!isLive()) {
+    const id = `sbx_${paid}`;
+    if (!localClaims.some((c) => c.id === id)) {
+      const claim: Claim = {
+        id,
+        stateCode,
+        cityId: cityIdValue,
+        cityName,
+        orgName,
+        pitch: (params.get("pitch") ?? "").slice(0, 140),
+        link,
+        amount,
+        at: Date.now(),
+        status: "paid",
+      };
+      localClaims = [...localClaims, claim];
+      saveLocal(localClaims);
+      snapshot = buildLocalSnapshot(localClaims);
+      emit();
+    }
+  }
+
+  return {
+    stateCode,
+    stateName: stateCodeToName(stateCode),
+    orgName,
+    amount,
+    cityName,
+    href: pinHref(orgName, link),
+  };
 }
