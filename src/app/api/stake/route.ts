@@ -6,6 +6,7 @@ import {
   whopChargeAmount,
   whopConfigured,
   whopCurrency,
+  whopReturnUrl,
 } from "@/lib/payments/whop";
 import { PRICING, STATES, stateCodeToName } from "@/lib/states";
 
@@ -235,12 +236,28 @@ export async function POST(req: NextRequest) {
       claimId = `sandbox_${randomBytes(6).toString("hex")}`;
     }
 
-    // 2. One one-time plan for this exact stake → Whop's hosted checkout.
+    // 2. One one-time plan for this exact stake → Whop's hosted checkout, wrapped
+    //    in a checkout configuration that returns the buyer to the site. The
+    //    stake facts ride on the return URL: with no database yet (sandbox dry
+    //    run) that is what lets the map colour the state when they come back.
+    const back = new URL(whopReturnUrl());
+    back.searchParams.set("paid", claimId);
+    back.searchParams.set("state", stateCode);
+    back.searchParams.set("org", orgName);
+    back.searchParams.set("amount", String(chargeMajor));
+    if (pitch) back.searchParams.set("pitch", pitch);
+    if (link) back.searchParams.set("link", link);
+    if (cityId) {
+      back.searchParams.set("city", cityId);
+      if (cityName) back.searchParams.set("cityname", cityName);
+    }
+
     try {
       const checkout = await createWhopCheckout({
         amountMajor: chargeMajor,
         title: `${targetLabel} — ${currency} ${chargeMajor} placement`,
         description: whopDescription({ orgName, link, targetLabel }),
+        returnUrl: back.toString(),
         metadata: {
           claim_id: claimId,
           state_code: stateCode,

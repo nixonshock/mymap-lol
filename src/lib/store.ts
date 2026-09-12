@@ -649,3 +649,61 @@ export async function applyPaidClaim(
     leaderboard: full.cityId ? cityLeaderboard(full.cityId) : stateLeaderboard(full.stateCode),
   };
 }
+
+/**
+ * Sandbox test mode: Whop sends the buyer back with the stake facts on the URL
+ * (`?paid=…&state=…&org=…&amount=…`), and with no database yet nothing else
+ * knows the payment happened — so mirror it into this browser's local board and
+ * the state colours in. Returns true when a stake was added.
+ *
+ * Ignored once the shared board is live: there the claim row exists and the
+ * webhook is what marks it paid.
+ */
+export function applySandboxReturn(): boolean {
+  if (typeof window === "undefined" || isLive()) return false;
+
+  const params = new URLSearchParams(window.location.search);
+  const paid = params.get("paid");
+  const stateCode = (params.get("state") ?? "").toUpperCase();
+  if (!paid || paid.length > 80) return false;
+  if (!STATES.some((s) => s.code === stateCode)) return false;
+
+  const id = `sbx_${paid}`;
+  // Drop the return params so a refresh, a back-navigation or a shared link
+  // can't replay them (also keeps the address bar clean).
+  const strip = () => {
+    try {
+      window.history.replaceState(null, "", window.location.pathname + window.location.hash);
+    } catch {
+      /* history unavailable — the id check below still stops a double-add */
+    }
+  };
+
+  if (localClaims.some((c) => c.id === id)) {
+    strip();
+    return false;
+  }
+
+  const rawCity = params.get("city") ?? "";
+  const city = rawCity && rawCity.startsWith(stateCode.toLowerCase() + ":") ? rawCity : undefined;
+  const amount = Math.round(Number(params.get("amount")) || 0);
+  const claim: Claim = {
+    id,
+    stateCode,
+    cityId: city,
+    cityName: city ? (params.get("cityname") ?? "").slice(0, 60) || undefined : undefined,
+    orgName: (params.get("org") ?? "").slice(0, 60) || "Sandbox stake",
+    pitch: (params.get("pitch") ?? "").slice(0, 140),
+    link: params.get("link") ?? undefined,
+    amount: amount >= PRICING.minClaim ? amount : PRICING.minClaim,
+    at: Date.now(),
+    status: "paid",
+  };
+
+  localClaims = [...localClaims, claim];
+  saveLocal(localClaims);
+  snapshot = buildLocalSnapshot(localClaims);
+  emit();
+  strip();
+  return true;
+}

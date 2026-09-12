@@ -69,6 +69,8 @@ export interface WhopCheckoutInput {
   title: string;
   description: string;
   metadata: Record<string, string>;
+  /** overrides `whopReturnUrl()` — the route appends the stake facts to it */
+  returnUrl?: string;
 }
 
 export interface WhopCheckout {
@@ -120,7 +122,7 @@ export async function createWhopCheckout(input: WhopCheckoutInput): Promise<Whop
   try {
     const config = await createWhopCheckoutConfig({
       planId,
-      redirectUrl: whopReturnUrl(),
+      redirectUrl: input.returnUrl ?? whopReturnUrl(),
       metadata: input.metadata,
     });
     return {

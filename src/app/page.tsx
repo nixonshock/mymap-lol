@@ -8,7 +8,7 @@ import LiveActivity from "@/components/LiveActivity";
 import CitiesPanel from "@/components/CitiesPanel";
 import StakeModal from "@/components/StakeModal";
 import { BoardModal, InfoModal, SearchModal } from "@/components/Modals";
-import { startBoardSync } from "@/lib/store";
+import { applySandboxReturn, startBoardSync } from "@/lib/store";
 import type { StakeTarget } from "@/lib/types";
 
 /** Desktop shell: left rail (brand → live activity → world order), the map
@@ -22,6 +22,10 @@ export default function Home() {
 
   // Poll the shared board (no-op while the backend is unconfigured).
   useEffect(() => {
+    // Sandbox test mode: a returning Whop payment lands with ?paid=… on the URL,
+    // which mirrors that stake into this browser's board (there is no database
+    // to remember it yet).
+    applySandboxReturn();
     startBoardSync();
   }, []);
 
