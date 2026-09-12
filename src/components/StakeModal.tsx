@@ -137,11 +137,26 @@ export default function StakeModal({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[26px] bg-white shadow-2xl sm:rounded-[26px]"
+        className="relative flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[26px] bg-white shadow-2xl sm:max-w-3xl sm:rounded-[26px]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* header */}
-        <div className="flex items-start justify-between border-b border-[#eef3f9] px-6 py-5">
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={onClose}
+          className="absolute right-3.5 top-3.5 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-[#eef3f9] text-[14px] text-[#8494ab] transition hover:bg-[#e6eef7]"
+        >
+          ✕
+        </button>
+
+        {/* Phones: one column — the entry (and its button) first, the leaderboard
+            under it. From sm up: two columns, the entry on the left and the board
+            on the right, each scrolling on its own so neither hides the other. */}
+        <div className="min-h-0 flex-1 overflow-y-auto sm:grid sm:grid-cols-2 sm:grid-rows-[minmax(0,1fr)] sm:overflow-hidden">
+          {/* the entry */}
+          <div className="flex flex-col px-6 pb-4 pt-5 sm:min-h-0 sm:overflow-y-auto">
+            {/* header */}
+            <div className="pr-10">
           <div>
             <div className="text-[11px] font-extrabold uppercase tracking-[1.54px] text-[#8494ab]">
               {where} · live
@@ -168,82 +183,9 @@ export default function StakeModal({
               </div>
             )}
           </div>
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-[#eef3f9] text-[14px] text-[#8494ab] transition hover:bg-[#e6eef7]"
-          >
-            ✕
-          </button>
         </div>
 
-        {/* leaderboard */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          <div className="text-[12px] font-extrabold uppercase tracking-wide text-[#b8860b]">
-            Leaderboard
-          </div>
-          {lb.isEmpty ? (
-            <p className="mt-2 text-[13px] font-semibold leading-relaxed text-[#8494ab]">
-              No holder yet. Be the first — plant your flag and own this {isCity ? "city" : "state"}.
-            </p>
-          ) : (
-            <ol className="mt-2 space-y-1.5">
-              {lb.holders.slice(0, 6).map((h, i) => (
-                <li
-                  key={h.orgName}
-                  className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 ${
-                    i === 0 ? "bg-[#fff7e0] ring-1 ring-[#ffe3a1]" : "bg-[#f2f7fc]"
-                  }`}
-                >
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <span
-                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
-                        i === 0 ? "bg-[#ffc93c] text-[#4a3400]" : "bg-white text-[#8494ab] ring-1 ring-[#e5edf5]"
-                      }`}
-                    >
-                      {i + 1}
-                    </span>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1 truncate text-[13px] font-bold text-[#1f2b3e]">
-                        {/* the name opens the bidder's listing page (their link preview) */}
-                        <Link
-                          href={pinHref(h.orgName, h.link)}
-                          onClick={(e) => e.stopPropagation()}
-                          title={`${h.orgName} — listing page`}
-                          className="truncate text-[#166d4a] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
-                        >
-                          {h.orgName}
-                        </Link>
-                        {safeHref(h.link) && (
-                          <a
-                            href={outboundHref(h.link) ?? undefined}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            aria-label={`Open ${h.orgName}'s site`}
-                            title={safeHref(h.link) ?? undefined}
-                            className="shrink-0 text-[10.5px] font-bold text-[#8494ab] transition hover:text-[#1f7a55]"
-                          >
-                            ↗
-                          </a>
-                        )}
-                        {i === 0 && <span aria-label="top holder">👑</span>}
-                      </div>
-                      <div className="truncate text-[11px] font-semibold text-[#8494ab]">
-                        {[h.pitch, linkLabel(h.link)].filter(Boolean).join(" · ")}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-[13px] font-extrabold tabular-nums text-[#1f7a55]">
-                    {money(h.total)}
-                  </div>
-                </li>
-              ))}
-            </ol>
-          )}
-
-          {/* form */}
+        {/* form */}
           <div className="mt-5 space-y-2.5">
             <input
               value={form.orgName}
@@ -374,6 +316,74 @@ export default function StakeModal({
               {result.message}
             </div>
           )}
+          </div>
+
+          {/* the board — its own column from sm up, its own scroll so a long
+              leaderboard can never push the form out of view */}
+          <div className="border-t border-[#eef3f9] px-6 pb-5 pt-4 sm:min-h-0 sm:overflow-y-auto sm:border-l sm:border-t-0">
+            <div className="pr-10 text-[12px] font-extrabold uppercase tracking-wide text-[#b8860b]">
+              Leaderboard
+            </div>
+            {lb.isEmpty ? (
+              <p className="mt-2 text-[13px] font-semibold leading-relaxed text-[#8494ab]">
+                No holder yet. Be the first — plant your flag and own this {isCity ? "city" : "state"}.
+              </p>
+            ) : (
+              <ol className="mt-2 space-y-1.5">
+                {lb.holders.slice(0, 8).map((h, i) => (
+                  <li
+                    key={h.orgName}
+                    className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 ${
+                      i === 0 ? "bg-[#fff7e0] ring-1 ring-[#ffe3a1]" : "bg-[#f2f7fc]"
+                    }`}
+                  >
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span
+                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                          i === 0 ? "bg-[#ffc93c] text-[#4a3400]" : "bg-white text-[#8494ab] ring-1 ring-[#e5edf5]"
+                        }`}
+                      >
+                        {i + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1 truncate text-[13px] font-bold text-[#1f2b3e]">
+                          {/* the name opens the bidder's listing page (their link preview) */}
+                          <Link
+                            href={pinHref(h.orgName, h.link)}
+                            onClick={(e) => e.stopPropagation()}
+                            title={`${h.orgName} — listing page`}
+                            className="truncate text-[#166d4a] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
+                          >
+                            {h.orgName}
+                          </Link>
+                          {safeHref(h.link) && (
+                            <a
+                              href={outboundHref(h.link) ?? undefined}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label={`Open ${h.orgName}'s site`}
+                              title={safeHref(h.link) ?? undefined}
+                              className="shrink-0 text-[10.5px] font-bold text-[#8494ab] transition hover:text-[#1f7a55]"
+                            >
+                              ↗
+                            </a>
+                          )}
+                          {i === 0 && <span aria-label="top holder">👑</span>}
+                        </div>
+                        <div className="truncate text-[11px] font-semibold text-[#8494ab]">
+                          {[h.pitch, linkLabel(h.link)].filter(Boolean).join(" · ")}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-[13px] font-extrabold tabular-nums text-[#1f7a55]">
+                      {money(h.total)}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
         </div>
 
         {/* footer */}
