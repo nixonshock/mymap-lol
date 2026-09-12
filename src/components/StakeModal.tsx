@@ -66,8 +66,12 @@ export default function StakeModal({
   // The stored link is the domain only (site) or the canonical profile URL
   // (social), so the same listing always tops up instead of duplicating.
   const normalized = useMemo(() => normalizeLink(form.link, mode), [form.link, mode]);
-  /** Typed name wins; otherwise the link names the listing ("acme.com" / "@handle"). */
-  const displayName = form.orgName.trim() || normalized.display || "";
+  /**
+   * The NAME is the entry and it is required — a brand, a person, a handle,
+   * anything. There is no fallback to the link any more: without a name there is
+   * nothing for a later top-up to match.
+   */
+  const displayName = form.orgName.trim();
   /**
    * What actually gets sent: when the typed name matches an existing holder we
    * send THEIR stored spelling, so the payment always lands on the same entry
@@ -244,7 +248,7 @@ export default function StakeModal({
             <input
               value={form.orgName}
               onChange={(e) => setForm({ ...form, orgName: e.target.value })}
-              placeholder={mode === "social" ? "Name (optional — defaults to the @handle)" : "Organization name (optional)"}
+              placeholder="Name"
               className="w-full rounded-xl border border-[#dfe7f0] bg-[#fbfdff] px-3.5 py-2.5 text-[13px] font-semibold text-[#1f2b3e] outline-none transition focus:border-[#b9cde0]"
             />
             {/* Live recognition: proves the name IS the entry, so a top-up is
@@ -304,21 +308,18 @@ export default function StakeModal({
             {normalized.error ? (
               <div className="text-[11px] font-bold text-[#c0392b]">{normalized.error}</div>
             ) : (
-              !form.orgName.trim() &&
-              normalized.display && (
+              !form.orgName.trim() && (
                 <div className="text-[11px] font-semibold text-[#8494ab]">
-                  Listed as <span className="font-extrabold text-[#1f7a55]">{normalized.display}</span>
+                  Your name is your entry — a brand, a person, anything. It&apos;s required.
                 </div>
               )
             )}
 
-            <input
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              placeholder="Email for your receipt (optional)"
-              className="w-full rounded-xl border border-[#dfe7f0] bg-[#fbfdff] px-3.5 py-2.5 text-[13px] font-semibold text-[#1f2b3e] outline-none transition focus:border-[#b9cde0]"
-            />
+            {/* The receipt-email field is parked until mymap.lol can actually send
+                mail — Whop receipts the buyer itself, so the label was a promise
+                the app didn't keep. The plumbing (form.email → /api/stake →
+                claims.org_email) stays for when we do. */}
+
             <div className="flex items-center gap-2">
               <input
                 type="number"

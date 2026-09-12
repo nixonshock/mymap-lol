@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
   const amountCents = amountUsd * 100;
 
   if (!/^MY-\d{2}$/.test(stateCode)) return json({ ok: false, message: "Unknown state." }, 400);
-  if (orgName.length < 2) return json({ ok: false, message: "Organization name is too short." }, 400);
+  if (orgName.length < 2) return json({ ok: false, message: "A name is required." }, 400);
   if (!pitch) return json({ ok: false, message: "A one-line pitch is required." }, 400);
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return json({ ok: false, message: "That email doesn't look right." }, 400);
