@@ -9,7 +9,7 @@ import CitiesPanel from "@/components/CitiesPanel";
 import StakeModal from "@/components/StakeModal";
 import { BoardModal, InfoModal, SearchModal } from "@/components/Modals";
 import PaymentCelebration from "@/components/PaymentCelebration";
-import { consumePaidReturn, startBoardSync, type PaidReturn } from "@/lib/store";
+import { cityById, consumePaidReturn, startBoardSync, type PaidReturn } from "@/lib/store";
 import { stateCodeToName } from "@/lib/states";
 import type { StakeTarget } from "@/lib/types";
 
@@ -22,11 +22,11 @@ export default function Home() {
   const [modal, setModal] = useState<"info" | "board" | "search" | null>(null);
   const [sheet, setSheet] = useState<"order" | "cities" | null>(null);
   /**
-   * The state whose bids the board is showing (null = the top-10 ranking).
+   * The territory whose bids the board is showing (null = the ranking).
    * Selecting is free — it never opens the payment dialog, it just lets visitors
-   * read every bid on that state; the panel's CTA is what opens the dialog.
+   * read every bid there; the panel's CTA is what opens the dialog.
    */
-  const [viewed, setViewed] = useState<string | null>(null);
+  const [selection, setSelection] = useState<{ kind: "state" | "city"; code: string } | null>(null);
   /** set when we just came back from a paid checkout — drives the celebration */
   const [paid, setPaid] = useState<PaidReturn | null>(null);
 
@@ -41,19 +41,27 @@ export default function Home() {
     startBoardSync();
   }, []);
 
-  const pickState = useCallback((code: string) => {
-    setViewed(code);
-    // Below xl the board lives in a sheet, so open it — tapping a state should
-    // show its bids, not silently highlight it.
+  /** Show a territory's bids in the board. Below xl the board lives in a sheet. */
+  const showBids = useCallback((sel: { kind: "state" | "city"; code: string }) => {
+    setSelection(sel);
     if (typeof window !== "undefined" && !window.matchMedia("(min-width: 1280px)").matches) {
       setSheet("order");
     }
   }, []);
 
+  const pickState = useCallback((code: string) => showBids({ kind: "state", code }), [showBids]);
+  const selectCity = useCallback((id: string) => showBids({ kind: "city", code: id }), [showBids]);
+
   /** The board's CTA: this is the only way into the bidding window from there. */
-  const openStake = useCallback((code: string) => {
+  const openStake = useCallback((sel: { kind: "state" | "city"; code: string }) => {
     setSheet(null);
-    setTarget({ kind: "state", code });
+    if (sel.kind === "city") {
+      const city = cityById(sel.code);
+      if (!city) return;
+      setTarget({ kind: "city", id: city.id, name: city.name, stateCode: city.state });
+      return;
+    }
+    setTarget({ kind: "state", code: sel.code });
   }, []);
 
   return (
@@ -61,7 +69,12 @@ export default function Home() {
       {/* full-bleed ocean; the map is centred in the middle column on desktop
           (left/right insets = gutter + rail width + gap) and full-bleed below xl */}
       <div className="absolute inset-0 flex items-center justify-center xl:bottom-3 xl:left-[312px] xl:right-[312px] xl:top-3">
-        <MalaysiaMap selectedCode={viewed} onSelect={pickState} />
+        <MalaysiaMap
+          selectedCode={selection?.kind === "state" ? selection.code : null}
+          onSelect={pickState}
+          selectedCityId={selection?.kind === "city" ? selection.code : null}
+          onSelectCity={selectCity}
+        />
       </div>
 
       {/* overlay UI */}
@@ -74,10 +87,10 @@ export default function Home() {
           </div>
           <div className="hidden min-h-0 flex-[6] xl:block">
             <WorldOrder
-              code={viewed}
-              onSelect={pickState}
+              selection={selection}
+              onSelect={showBids}
               onClaim={openStake}
-              onBack={() => setViewed(null)}
+              onBack={() => setSelection(null)}
             />
           </div>
         </div>
@@ -85,7 +98,7 @@ export default function Home() {
         {/* right rail */}
         <div className="absolute right-4 top-4 flex w-[calc(100%-2rem)] flex-col items-end gap-3 xl:bottom-3 xl:right-3 xl:top-3 xl:w-[288px]">
           <div className="hidden min-h-0 w-full flex-1 xl:flex">
-            <CitiesPanel onPick={setTarget} />
+            <CitiesPanel onSelect={selectCity} onStake={(t) => setTarget(t)} />
           </div>
         </div>
 
@@ -96,12 +109,18 @@ export default function Home() {
             onClick={() => setSheet("order")}
             className="rounded-full bg-white/95 px-4 py-2 text-[13px] font-bold text-[#1f2b3e] shadow-lg ring-1 ring-[#e5edf5]"
           >
-            {viewed ? `🏳️ ${stateCodeToName(viewed)} bids` : "🇲🇾 MY ORDER"}
+            {selection
+              ? `🏳️ ${
+                  selection.kind === "city"
+                    ? (cityById(selection.code)?.name ?? "City")
+                    : stateCodeToName(selection.code)
+                } bids`
+              : "🇲🇾 MY ORDER"}
           </button>
-          {viewed && (
+          {selection && (
             <button
               type="button"
-              onClick={() => openStake(viewed)}
+              onClick={() => openStake(selection)}
               className="rounded-full bg-[#ffc93c] px-4 py-2 text-[13px] font-bold text-[#4a3400] shadow-lg transition hover:brightness-95"
             >
               Claim a spot
@@ -123,15 +142,19 @@ export default function Home() {
           <div className="h-[86dvh] w-full max-w-md rounded-t-[22px] bg-white p-3 shadow-2xl">
             {sheet === "order" ? (
               <WorldOrder
-                code={viewed}
-                onSelect={pickState}
+                selection={selection}
+                onSelect={showBids}
                 onClaim={openStake}
-                onBack={() => setViewed(null)}
+                onBack={() => setSelection(null)}
                 onClose={() => setSheet(null)}
               />
             ) : (
               <CitiesPanel
-                onPick={(t) => {
+                onSelect={(id) => {
+                  setSelection({ kind: "city", code: id });
+                  setSheet("order");
+                }}
+                onStake={(t) => {
                   setSheet(null);
                   setTarget(t);
                 }}

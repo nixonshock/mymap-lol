@@ -4,14 +4,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { FeatureCollection } from "geojson";
 import { buildMapGeom, cityPin, stateFill, stateInk, type MapFeature } from "@/lib/geo";
 import { useSyncExternalStore } from "react";
-import { subscribe, getVersion, allTotals, citiesInState, cityTotals, stateLeaderboard, topHolder } from "@/lib/store";
+import { subscribe, getVersion, allTotals, citiesInState, cityTotals, stateLeaderboard, topHolder, topHolderForCity } from "@/lib/store";
 import { PRICING, money, moneyBoth, stateCodeToName } from "@/lib/states";
 import { linkLabel, safeHref } from "@/lib/links";
 import { CITIES } from "@/lib/cities";
+import { OwnerCardContent } from "@/components/OwnerPreview";
 
 interface Props {
   selectedCode: string | null;
   onSelect: (code: string) => void;
+  /** city whose pin should read as selected */
+  selectedCityId?: string | null;
+  /** a city pin was clicked → the board shows that city's bids */
+  onSelectCity?: (id: string) => void;
 }
 
 interface FeatureWithProps extends MapFeature {
@@ -27,6 +32,8 @@ interface Tf {
 const MIN_K = 1;
 const MAX_K = 12;
 const ZOOM_STEP = 1.35;
+/** width of the city owner preview card (it is placed beside the pin) */
+const CITY_CARD_W = 300;
 
 /**
  * The href of the nearest ancestor element carrying data-href (the owner label
@@ -38,10 +45,20 @@ function hrefFrom(target: EventTarget | null): string | null {
   return el.closest("[data-href]")?.getAttribute("data-href") ?? null;
 }
 
-export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
+export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, onSelectCity }: Props) {
   const version = useSyncExternalStore(subscribe, getVersion, getVersion);
   const [geojson, setGeojson] = useState<FeatureCollection | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
+  /**
+   * A hovered city pin: which city, its name, and where the pin sits on screen
+   * (the owner preview is placed from that rect).
+   */
+  const [cityHover, setCityHover] = useState<{
+    id: string;
+    name: string;
+    rect: { x: number; y: number; right: number; top: number };
+  } | null>(null);
+  const cityLeaveTimer = useRef<number | null>(null);
   const [mouse, setMouse] = useState<{ x: number; y: number } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [tf, setTf] = useState<Tf>({ k: 1, x: 0, y: 0 });
@@ -382,23 +399,64 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
               );
             })}
           {/* city markers — orange when open, dark ink when someone holds the
-              city. The names live in the Cities panel so nothing gets clipped. */}
+              city. The names live in the Cities panel so nothing gets clipped.
+              Each pin gets an invisible hit circle (the dot itself is tiny), so
+              hovering shows the owner preview and clicking selects that city. */}
           {projectedCities.map((c) => {
             const held = (stakedCities[c.id]?.total ?? 0) > 0;
             const k = Math.max(1, tf.k);
             const r = (held ? 4.4 : 2.6) / Math.max(1, Math.sqrt(k));
+            const isSelectedCity = c.id === selectedCityId;
             return (
-              <circle
-                key={`city-${c.id}`}
-                cx={c.x}
-                cy={c.y}
-                r={r}
-                fill={cityPin(held)}
-                stroke="#ffffff"
-                strokeWidth={(held ? 1.8 : 1.1) / Math.max(1, Math.pow(k, 0.5))}
-                opacity={0.97}
-                className="pointer-events-none"
-              />
+              <g key={`city-${c.id}`}>
+                <circle
+                  cx={c.x}
+                  cy={c.y}
+                  r={r}
+                  fill={cityPin(held)}
+                  stroke="#ffffff"
+                  strokeWidth={(held ? 1.8 : 1.1) / Math.max(1, Math.pow(k, 0.5))}
+                  opacity={0.97}
+                  className="pointer-events-none"
+                />
+                {isSelectedCity && (
+                  <circle
+                    cx={c.x}
+                    cy={c.y}
+                    r={r + 3.5 / Math.max(1, Math.pow(k, 0.5))}
+                    fill="none"
+                    stroke="#1f2b3e"
+                    strokeWidth={1.6 / Math.max(1, Math.pow(k, 0.5))}
+                    className="pointer-events-none"
+                  />
+                )}
+                <circle
+                  cx={c.x}
+                  cy={c.y}
+                  r={Math.max(9, r * 2.4)}
+                  fill="transparent"
+                  className="cursor-pointer"
+                  onPointerOver={(e) => {
+                    if (cityLeaveTimer.current) window.clearTimeout(cityLeaveTimer.current);
+                    if (!held) return;
+                    const b = e.currentTarget.getBoundingClientRect();
+                    setCityHover({
+                      id: c.id,
+                      name: c.name,
+                      rect: { x: b.x, y: b.y, right: b.right, top: b.top },
+                    });
+                  }}
+                  onPointerOut={() => {
+                    if (cityLeaveTimer.current) window.clearTimeout(cityLeaveTimer.current);
+                    cityLeaveTimer.current = window.setTimeout(() => setCityHover(null), 140);
+                  }}
+                  onClick={() => {
+                    if (dragging || !onSelectCity) return;
+                    setCityHover(null);
+                    onSelectCity(c.id);
+                  }}
+                />
+              </g>
             );
           })}
         </g>
@@ -454,6 +512,46 @@ export default function MalaysiaMap({ selectedCode, onSelect }: Props) {
           cityStakes={citiesInState(hovered)}
         />
       )}
+
+      {/* city preview — hovering a held city pin shows its owner (the same card
+          the lists use). Fixed, so a pan or zoom can't drag it along. */}
+      {cityHover &&
+        (() => {
+          const holder = topHolderForCity(cityHover.id);
+          if (!holder) return null;
+          const left =
+            cityHover.rect.right + 12 + CITY_CARD_W <= window.innerWidth
+              ? cityHover.rect.right + 12
+              : Math.max(8, cityHover.rect.x - CITY_CARD_W - 12);
+          const top = Math.min(
+            Math.max(cityHover.rect.top - 10, 8),
+            Math.max(8, window.innerHeight - 300),
+          );
+          return (
+            <div
+              style={{ left, top, width: CITY_CARD_W }}
+              onMouseEnter={() => {
+                if (cityLeaveTimer.current) window.clearTimeout(cityLeaveTimer.current);
+              }}
+              onMouseLeave={() => {
+                cityLeaveTimer.current = window.setTimeout(() => setCityHover(null), 140);
+              }}
+              className="fixed z-[60] overflow-hidden rounded-2xl bg-white text-left shadow-[0_18px_50px_-10px_rgba(31,43,62,0.45)] ring-1 ring-[#dfe7f0]"
+            >
+              <OwnerCardContent
+                data={{
+                  orgName: holder.orgName,
+                  pitch: holder.pitch,
+                  link: holder.link,
+                  total: holder.total,
+                  claims: holder.claims,
+                  where: cityHover.name,
+                  rank: 1,
+                }}
+              />
+            </div>
+          );
+        })()}
     </div>
   );
 }

@@ -42,17 +42,11 @@ const CARD_H = 300;
 
 const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max);
 
-function OwnerCard({
-  data,
-  pos,
-  onEnter,
-  onLeave,
-}: {
-  data: OwnerPreviewData;
-  pos: { top: number; left: number };
-  onEnter: () => void;
-  onLeave: () => void;
-}) {
+/**
+ * The card's contents, without positioning — shared by the hover card and by the
+ * map's city tooltip.
+ */
+export function OwnerCardContent({ data }: { data: OwnerPreviewData }) {
   const { data: preview } = useLinkPreview(data.link);
   const [imageBroken, setImageBroken] = useState(false);
 
@@ -62,13 +56,7 @@ function OwnerCard({
   const extra = data.pitch && preview?.description && preview.description !== data.pitch ? preview.description : "";
 
   return (
-    <div
-      style={{ top: pos.top, left: pos.left, width: CARD_W }}
-      onMouseEnter={onEnter}
-      onMouseLeave={onLeave}
-      className="pointer-events-auto fixed z-[80] overflow-hidden rounded-2xl bg-white text-left shadow-[0_18px_50px_-10px_rgba(31,43,62,0.45)] ring-1 ring-[#dfe7f0]"
-      role="tooltip"
-    >
+    <>
       <div className="bg-[#1f2b3e] px-3.5 py-2.5">
         <div className="flex items-center gap-2">
           <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/10 text-[11px] font-extrabold text-white/85">
@@ -129,6 +117,30 @@ function OwnerCard({
           </Link>
         </div>
       </div>
+    </>
+  );
+}
+
+function OwnerCard({
+  data,
+  pos,
+  onEnter,
+  onLeave,
+}: {
+  data: OwnerPreviewData;
+  pos: { top: number; left: number };
+  onEnter: () => void;
+  onLeave: () => void;
+}) {
+  return (
+    <div
+      style={{ top: pos.top, left: pos.left, width: CARD_W }}
+      onMouseEnter={onEnter}
+      onMouseLeave={onLeave}
+      className="pointer-events-auto fixed z-[80] overflow-hidden rounded-2xl bg-white text-left shadow-[0_18px_50px_-10px_rgba(31,43,62,0.45)] ring-1 ring-[#dfe7f0]"
+      role="tooltip"
+    >
+      <OwnerCardContent data={data} />
     </div>
   );
 }
@@ -142,9 +154,12 @@ function OwnerCard({
 export function OwnerHover({
   owner,
   children,
+  className = "inline-flex min-w-0 max-w-full align-baseline",
 }: {
   owner: OwnerPreviewData | null | (() => OwnerPreviewData | null);
   children: ReactNode;
+  /** lets a caller make the hover target a whole row instead of an inline name */
+  className?: string;
 }) {
   const anchor = useRef<HTMLSpanElement | null>(null);
   const [data, setData] = useState<OwnerPreviewData | null>(null);
@@ -209,7 +224,7 @@ export function OwnerHover({
     <>
       <span
         ref={anchor}
-        className="inline-flex min-w-0 max-w-full align-baseline"
+        className={className}
         onPointerEnter={(e) => {
           // A finger is not a hover: on touch the row's own tap is the way in, and
           // a tap would otherwise flash the card open just before navigating.

@@ -5,47 +5,69 @@ import Link from "next/link";
 import {
   subscribe,
   getVersion,
+  allCities,
+  cityById,
+  cityLeaderboard,
+  cityTotals,
   minimumToOvertake,
   stateLeaderboard,
+  topHolderForCity,
   worldOrder,
 } from "@/lib/store";
 import OwnerHover from "@/components/OwnerPreview";
 import { pinHref } from "@/lib/links";
-import { PRICING, money, moneyBoth } from "@/lib/states";
+import { PRICING, money, moneyBoth, stateCodeToName } from "@/lib/states";
 import type { HolderRow } from "@/lib/types";
+
+/** A territory the board can show the bids of. */
+export type BoardSelection = { kind: "state" | "city"; code: string };
 
 /**
  * The board under the map.
  *
- * Two views in one panel:
- *   • nothing selected — the TOP 10 · MOST SPENT ranking of states, each row
- *     naming its #1 bidder (the fastest read of "who owns Malaysia");
- *   • a state selected — every bid on that state, ranked, with a
- *     "Claim a spot — for $X" button into the bidding window.
+ * Three views in one panel:
+ *   • nothing selected — the top 10 ranking, switchable between STATES and
+ *     CITIES (both are first-class here), each row naming its #1 bidder;
+ *   • a state selected — every bid on it, ranked;
+ *   • a city selected — every bid on that city, ranked, with the state named so
+ *     it is always clear which territory the money is being staked on.
  *
- * Selecting never spends money: the panel is where visitors browse bidders
- * (worldmap.lol's claimed-territory panel does the same), and the CTA is the
- * only way into the stake dialog from here.
+ * Every view ends in "Claim a spot — for $X": selecting never spends money, the
+ * CTA is the only way into the bidding window from here.
  */
 
 interface Props {
-  /** state code whose bids to list; null/undefined = the top-10 board */
-  code?: string | null;
-  /** a state row was clicked → show its bids */
-  onSelect: (code: string) => void;
-  /** the CTA → open the bidding window for that state */
-  onClaim: (code: string) => void;
-  /** back to the top-10 board */
+  selection: BoardSelection | null;
+  /** a ranking row was clicked → show that territory's bids */
+  onSelect: (selection: BoardSelection) => void;
+  /** the CTA (or a bid row) → open the bidding window */
+  onClaim: (selection: BoardSelection) => void;
+  /** back to the ranking */
   onBack: () => void;
   onClose?: () => void;
 }
 
-export default function WorldOrder({ code, onSelect, onClaim, onBack, onClose }: Props) {
+export default function WorldOrder({ selection, onSelect, onClaim, onBack, onClose }: Props) {
   const version = useSyncExternalStore(subscribe, getVersion, getVersion);
-  const list = useMemo(() => worldOrder(10), [version]);
+  const [rank, setRank] = useState<"states" | "cities">("states");
   const [expanded, setExpanded] = useState(false);
 
-  const board = useMemo(() => (code ? stateLeaderboard(code) : null), [code, version]);
+  const states = useMemo(() => worldOrder(10), [version]);
+  const cities = useMemo(() => {
+    const totals = cityTotals();
+    return allCities()
+      .map((c) => ({ ...c, total: totals[c.id]?.total ?? 0, holder: topHolderForCity(c.id) }))
+      .filter((c) => c.total > 0)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10);
+  }, [version]);
+
+  const board = useMemo(
+    () => (selection ? (selection.kind === "city" ? cityLeaderboard(selection.code) : stateLeaderboard(selection.code)) : null),
+    [selection, version],
+  );
+  /** for a city: which state it sits in, so the header can say so */
+  const cityParent = selection?.kind === "city" ? cityById(selection.code)?.state : undefined;
   /** what it costs this visitor to take #1 here (the $10 floor when empty) */
   const claimAmount = useMemo(() => (board ? minimumToOvertake(board, "") : PRICING.minClaim), [board]);
 
@@ -61,51 +83,48 @@ export default function WorldOrder({ code, onSelect, onClaim, onBack, onClose }:
 
   const collapse = () => setExpanded(false);
 
-  /** One bidder row: rank, name (hover = owner preview, click = their listing), pitch, staked. */
-  const bidRow = (h: HolderRow, rank: number, where: string, onPick?: () => void) => {
-    const top = rank === 1;
+  /** One bidder row: rank, name (hover = owner preview, click follows the row), pitch, staked. */
+  const bidRow = (h: HolderRow, rankNo: number, where: string, onPick: () => void) => {
+    const top = rankNo === 1;
     return (
-      <div
+      <OwnerHover
         key={`${where}:${h.orgName}`}
-        role={onPick ? "button" : undefined}
-        tabIndex={onPick ? 0 : undefined}
-        aria-label={onPick ? `Claim a spot on ${where}` : undefined}
-        onClick={onPick}
-        onKeyDown={
-          onPick
-            ? (e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  collapse();
-                  onPick();
-                }
-              }
-            : undefined
-        }
-        className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition ${
-          top ? "bg-[#fff7e0] ring-1 ring-[#ffe3a1]" : "bg-[#f2f7fc] " + (onPick ? "hover:bg-[#e9f1f9]" : "")
-        }`}
+        className="block w-full"
+        owner={{
+          orgName: h.orgName,
+          pitch: h.pitch,
+          link: h.link,
+          total: h.total,
+          claims: h.claims,
+          where,
+          rank: rankNo,
+        }}
       >
-        <span
-          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
-            top ? "bg-[#ffc93c] text-[#4a3400]" : "bg-white text-[#8494ab] ring-1 ring-[#e5edf5]"
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label={`Claim a spot on ${where}`}
+          onClick={onPick}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              collapse();
+              onPick();
+            }
+          }}
+          className={`flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition ${
+            top ? "bg-[#fff7e0] ring-1 ring-[#ffe3a1]" : "bg-[#f2f7fc] hover:bg-[#e9f1f9]"
           }`}
         >
-          {rank}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1 truncate text-[13px] font-bold text-[#1f2b3e]">
-            <OwnerHover
-              owner={{
-                orgName: h.orgName,
-                pitch: h.pitch,
-                link: h.link,
-                total: h.total,
-                claims: h.claims,
-                where,
-                rank,
-              }}
-            >
+          <span
+            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+              top ? "bg-[#ffc93c] text-[#4a3400]" : "bg-white text-[#8494ab] ring-1 ring-[#e5edf5]"
+            }`}
+          >
+            {rankNo}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1 truncate text-[13px] font-bold text-[#1f2b3e]">
               <Link
                 href={pinHref(h.orgName, h.link)}
                 onClick={(e) => e.stopPropagation()}
@@ -114,16 +133,105 @@ export default function WorldOrder({ code, onSelect, onClaim, onBack, onClose }:
               >
                 {h.orgName}
               </Link>
-            </OwnerHover>
-            {top && <span aria-label="top holder">👑</span>}
+              {top && <span aria-label="top holder">👑</span>}
+            </div>
+            <div className="truncate text-[11px] font-semibold text-[#8494ab]">
+              {[h.pitch, h.link ? h.link.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "") : null]
+                .filter(Boolean)
+                .join(" · ") || "no pitch yet"}
+            </div>
+          </div>
+          <div className="shrink-0 text-[13px] font-extrabold tabular-nums text-[#1f7a55]">{money(h.total)}</div>
+        </div>
+      </OwnerHover>
+    );
+  };
+
+  /** One row of the ranking (a state, or a city). */
+  const rankRow = (
+    code: string,
+    name: string,
+    sub: string,
+    total: number,
+    leader: string | null,
+    leaderLink: string | undefined,
+    kind: "state" | "city",
+    i: number,
+  ) => {
+    const top = i === 0;
+    return (
+      <div
+        key={`${kind}:${code}`}
+        role="button"
+        tabIndex={0}
+        aria-label={`See the bids on ${name}`}
+        onClick={() => {
+          collapse();
+          onSelect({ kind, code });
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            collapse();
+            onSelect({ kind, code });
+          }
+        }}
+        className={`flex w-full cursor-pointer items-center gap-3 rounded-2xl px-3 py-2 text-left transition ${
+          top ? "bg-[#fff7e0] ring-1 ring-[#ffe3a1]" : "bg-[#f2f7fc] hover:bg-[#e9f1f9]"
+        }`}
+      >
+        <span
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-bold ${
+            top ? "bg-[#ffc93c] text-[#4a3400]" : "bg-white text-[#8494ab] ring-1 ring-[#e5edf5]"
+          }`}
+        >
+          {i + 1}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1 truncate text-[14px] font-bold text-[#1f2b3e]">
+            {name}
+            {top && <span aria-label="top territory">👑</span>}
           </div>
           <div className="truncate text-[11px] font-semibold text-[#8494ab]">
-            {[h.pitch, h.link ? h.link.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "") : null]
-              .filter(Boolean)
-              .join(" · ") || "no pitch yet"}
+            {leader ? (
+              <>
+                {/* the bidder's name opens their listing page (link preview) */}
+                <OwnerHover
+                  owner={
+                    kind === "city"
+                      ? { orgName: leader, pitch: "", link: leaderLink, where: name, rank: 1 }
+                      : () => {
+                          const h = stateLeaderboard(code).holders[0];
+                          return h
+                            ? {
+                                orgName: h.orgName,
+                                pitch: h.pitch,
+                                link: h.link,
+                                total: h.total,
+                                claims: h.claims,
+                                where: name,
+                                rank: 1,
+                              }
+                            : null;
+                        }
+                  }
+                >
+                  <Link
+                    href={pinHref(leader, leaderLink)}
+                    onClick={(e) => e.stopPropagation()}
+                    title={`${leader} — listing page`}
+                    className="font-extrabold text-[#1f7a55] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
+                  >
+                    {leader}
+                  </Link>
+                </OwnerHover>
+                <span className="text-[#b0bed0]"> · </span>
+              </>
+            ) : null}
+            {sub}
           </div>
         </div>
-        <div className="shrink-0 text-[13px] font-extrabold tabular-nums text-[#1f7a55]">{money(h.total)}</div>
+        <div className="shrink-0 text-[14px] font-extrabold tabular-nums text-[#1f7a55]">{money(total)}</div>
       </div>
     );
   };
@@ -144,21 +252,41 @@ export default function WorldOrder({ code, onSelect, onClaim, onBack, onClose }:
                 onClick={onBack}
                 className="mt-1.5 flex items-center gap-1 text-[11px] font-extrabold uppercase tracking-wide text-[#3f7dd6] transition hover:text-[#2f63ad]"
               >
-                ← Top 10 board
+                ← {rank === "cities" ? "Top cities" : "Top 10 board"}
               </button>
               <div className="font-display mt-1 truncate text-[21px] font-bold leading-none text-[#3a2418]">
                 {board.name}
               </div>
               <div className="mt-1.5 text-[11.5px] font-bold text-[#8494ab]">
+                {selection?.kind === "city" && cityParent ? `${stateCodeToName(cityParent)} · ` : ""}
                 {board.holders.length === 1 ? "1 bid" : `${board.holders.length} bids`} ·{" "}
                 {money(board.totalStake)} staked
                 {board.isEmpty ? "" : ` · #1 pays ${money(board.holders[0]?.total ?? 0)}`}
               </div>
             </>
           ) : (
-            <div className="mt-2 text-[12px] font-extrabold tracking-wide text-[#b8860b]">
-              TOP 10 · MOST SPENT
-            </div>
+            <>
+              <div className="mt-2 flex items-center gap-1.5">
+                {(["states", "cities"] as const).map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    aria-pressed={rank === r}
+                    onClick={() => setRank(r)}
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide transition ${
+                      rank === r
+                        ? "bg-[#1f2b3e] text-white"
+                        : "bg-[#f2f7fc] text-[#8494ab] ring-1 ring-[#e5edf5] hover:text-[#1f2b3e]"
+                    }`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 text-[12px] font-extrabold tracking-wide text-[#b8860b]">
+                TOP 10 · MOST SPENT
+              </div>
+            </>
           )}
         </div>
 
@@ -196,9 +324,33 @@ export default function WorldOrder({ code, onSelect, onClaim, onBack, onClose }:
               </p>
             </div>
           ) : (
-            board.holders.map((h, i) => bidRow(h, i + 1, board.name, () => onClaim(board.code)))
+            board.holders.map((h, i) =>
+              bidRow(h, i + 1, board.name, () => onClaim({ kind: selection!.kind, code: selection!.code })),
+            )
           )
-        ) : list.length === 0 ? (
+        ) : rank === "cities" ? (
+          cities.length === 0 ? (
+            <div className="px-4 py-8 text-center">
+              <div className="text-2xl">🏙️</div>
+              <p className="mt-2 text-[13px] font-semibold leading-relaxed text-[#8494ab]">
+                No city staked yet. Pick one from the Cities panel on the right.
+              </p>
+            </div>
+          ) : (
+            cities.map((c, i) =>
+              rankRow(
+                c.id,
+                c.name,
+                `${stateCodeToName(c.state)}`,
+                c.total,
+                c.holder?.orgName ?? null,
+                c.holder?.link,
+                "city",
+                i,
+              ),
+            )
+          )
+        ) : states.length === 0 ? (
           <div className="px-4 py-8 text-center">
             <div className="text-2xl">🛰️</div>
             <p className="mt-2 text-[13px] font-semibold text-[#8494ab]">
@@ -206,82 +358,18 @@ export default function WorldOrder({ code, onSelect, onClaim, onBack, onClose }:
             </p>
           </div>
         ) : (
-          list.map((s, i) => {
-            const top = i === 0;
-            return (
-              <div
-                key={s.code}
-                role="button"
-                tabIndex={0}
-                aria-label={`See the bids on ${s.name}`}
-                onClick={() => {
-                  collapse();
-                  onSelect(s.code);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    collapse();
-                    onSelect(s.code);
-                  }
-                }}
-                className={`flex w-full cursor-pointer items-center gap-3 rounded-2xl px-3 py-2 text-left transition ${
-                  top ? "bg-[#fff7e0] ring-1 ring-[#ffe3a1]" : "bg-[#f2f7fc] hover:bg-[#e9f1f9]"
-                }`}
-              >
-                <span
-                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-bold ${
-                    top ? "bg-[#ffc93c] text-[#4a3400]" : "bg-white text-[#8494ab] ring-1 ring-[#e5edf5]"
-                  }`}
-                >
-                  {i + 1}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1 truncate text-[14px] font-bold text-[#1f2b3e]">
-                    {s.name}
-                    {top && <span aria-label="top state">👑</span>}
-                  </div>
-                  <div className="truncate text-[11px] font-semibold text-[#8494ab]">
-                    {s.leader ? (
-                      <>
-                        {/* the bidder's name opens their listing page (link preview) */}
-                        <OwnerHover
-                          owner={() => {
-                            const h = stateLeaderboard(s.code).holders[0];
-                            return h
-                              ? {
-                                  orgName: h.orgName,
-                                  pitch: h.pitch,
-                                  link: h.link,
-                                  total: h.total,
-                                  claims: h.claims,
-                                  where: s.name,
-                                  rank: 1,
-                                }
-                              : null;
-                          }}
-                        >
-                          <Link
-                            href={pinHref(s.leader, s.leaderLink)}
-                            onClick={(e) => e.stopPropagation()}
-                            title={`${s.leader} — listing page`}
-                            className="font-extrabold text-[#1f7a55] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
-                          >
-                            {s.leader}
-                          </Link>
-                        </OwnerHover>
-                        <span className="text-[#b0bed0]"> · </span>
-                      </>
-                    ) : null}
-                    {s.count} claim{s.count === 1 ? "" : "s"}
-                  </div>
-                </div>
-                <div className="shrink-0 text-[14px] font-extrabold tabular-nums text-[#1f7a55]">
-                  {money(s.total)}
-                </div>
-              </div>
-            );
-          })
+          states.map((s, i) =>
+            rankRow(
+              s.code,
+              s.name,
+              `${s.count} claim${s.count === 1 ? "" : "s"}`,
+              s.total,
+              s.leader,
+              s.leaderLink,
+              "state",
+              i,
+            ),
+          )
         )}
       </div>
 
@@ -292,7 +380,7 @@ export default function WorldOrder({ code, onSelect, onClaim, onBack, onClose }:
             type="button"
             onClick={() => {
               collapse();
-              onClaim(board.code);
+              onClaim({ kind: selection!.kind, code: selection!.code });
             }}
             className="font-display w-full rounded-2xl bg-[#ffc93c] py-3 text-center text-[15px] font-semibold text-[#4a3400] transition hover:brightness-95"
           >
@@ -304,7 +392,7 @@ export default function WorldOrder({ code, onSelect, onClaim, onBack, onClose }:
         </div>
       ) : (
         <div className="border-t border-[#eef3f9] px-6 py-3 text-center text-[11px] font-semibold text-[#8494ab]">
-          total staked across every state · click one to see its bids
+          total staked across every {rank === "cities" ? "city" : "state"} · click one to see its bids
         </div>
       )}
     </>

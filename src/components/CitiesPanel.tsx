@@ -10,14 +10,17 @@ import type { City } from "@/lib/cities";
 import type { StakeTarget } from "@/lib/types";
 
 interface Props {
-  onPick: (target: StakeTarget) => void;
+  /** a city row was clicked → the board shows that city's bids */
+  onSelect: (cityId: string) => void;
+  /** a brand-new city was just added → open the bidding window for it */
+  onStake: (target: StakeTarget) => void;
   onClose?: () => void;
 }
 
 /** Cities live in a list panel (not as labels on the map) so they stay legible
  *  and so visitors can add their own. A city stake is counted against the city
  *  only — it never claims the state it sits in. */
-export default function CitiesPanel({ onPick, onClose }: Props) {
+export default function CitiesPanel({ onSelect, onStake, onClose }: Props) {
   const version = useSyncExternalStore(subscribe, getVersion, getVersion);
   const [adding, setAdding] = useState(false);
   const [draftName, setDraftName] = useState("");
@@ -48,7 +51,7 @@ export default function CitiesPanel({ onPick, onClose }: Props) {
     setDraftName("");
     setError(null);
     setAdding(false);
-    onPick({ kind: "city", id: city.id, name: city.name, stateCode: city.state });
+    onStake({ kind: "city", id: city.id, name: city.name, stateCode: city.state });
   }
 
   return (
@@ -136,13 +139,13 @@ export default function CitiesPanel({ onPick, onClose }: Props) {
             key={c.id}
             city={c}
             total={totals[c.id]?.total ?? 0}
-            onPick={onPick}
+            onSelect={() => onSelect(c.id)}
           />
         ))}
       </div>
 
       <div className="border-t border-[#eef3f9] px-5 py-3 text-center text-[11px] font-semibold text-[#8494ab]">
-        click a city to stake on it · a city stake never claims the state
+        click a city to see its bids · a city stake never claims the state
       </div>
     </div>
   );
@@ -151,11 +154,11 @@ export default function CitiesPanel({ onPick, onClose }: Props) {
 function CityRow({
   city,
   total,
-  onPick,
+  onSelect,
 }: {
   city: City;
   total: number;
-  onPick: (target: StakeTarget) => void;
+  onSelect: () => void;
 }) {
   // The parent re-renders whenever the board version changes, so reading the
   // holder straight from the store here stays in sync.
@@ -163,10 +166,25 @@ function CityRow({
   const href = safeHref(holder?.link);
   const site = linkLabel(holder?.link);
 
-  const open = () =>
-    onPick({ kind: "city", id: city.id, name: city.name, stateCode: city.state });
+  const open = () => onSelect();
 
   return (
+    <OwnerHover
+      className="block w-full"
+      owner={
+        holder
+          ? {
+              orgName: holder.orgName,
+              pitch: holder.pitch,
+              link: holder.link,
+              total,
+              claims: holder.claims,
+              where: city.name,
+              rank: 1,
+            }
+          : null
+      }
+    >
     <div
       role="button"
       tabIndex={0}
@@ -180,7 +198,7 @@ function CityRow({
       className={`flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition ${
         total > 0 ? "bg-[#f0f8f3] ring-1 ring-[#cfe8d9] hover:bg-[#e8f4ee]" : "hover:bg-[#f2f7fc]"
       }`}
-      title={`Stake on ${city.name}`}
+      title={`See the bids on ${city.name}`}
     >
       <span
         className={`h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white ${
@@ -198,26 +216,15 @@ function CityRow({
         </span>
         {total > 0 && holder && (
           <span className="mt-0.5 flex items-baseline gap-1.5">
-            <OwnerHover
-              owner={{
-                orgName: holder.orgName,
-                pitch: holder.pitch,
-                link: holder.link,
-                total,
-                claims: holder.claims,
-                where: city.name,
-                rank: 1,
-              }}
+            {/* the row itself is the hover target (see OwnerHover above) */}
+            <Link
+              href={pinHref(holder.orgName, holder.link)}
+              onClick={(e) => e.stopPropagation()}
+              title={`${holder.orgName} — listing page`}
+              className="truncate text-[11px] font-extrabold text-[#1f7a55] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
             >
-              <Link
-                href={pinHref(holder.orgName, holder.link)}
-                onClick={(e) => e.stopPropagation()}
-                title={`${holder.orgName} — listing page`}
-                className="truncate text-[11px] font-extrabold text-[#1f7a55] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
-              >
-                {holder.orgName}
-              </Link>
-            </OwnerHover>
+              {holder.orgName}
+            </Link>
             {site && (
               <span className="truncate text-[10.5px] font-semibold text-[#8494ab]">· {site}</span>
             )}
@@ -248,5 +255,6 @@ function CityRow({
         </a>
       )}
     </div>
+    </OwnerHover>
   );
 }
