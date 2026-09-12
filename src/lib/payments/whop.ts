@@ -19,6 +19,9 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  *   WHOP_ADAPTIVE_PRICING  "true" → Whop shows the buyer's local currency
  *   WHOP_USD_MYR           rate used when the plan currency is MYR (default 4.04)
  *   WHOP_SANDBOX           "true" → sandbox-api.whop.com
+ *   WHOP_RETURN_URL        where the buyer lands after paying (default
+ *                          https://www.mymap.lol/) — carried by the checkout
+ *                          configuration, which is what avoids Whop's /joined page
  *   WHOP_WEBHOOK_SECRET    ws_… — verifies inbound webhooks
  */
 
@@ -27,6 +30,15 @@ const SANDBOX_API = "https://sandbox-api.whop.com/api/v1";
 
 export const whopApiBase = () => (process.env.WHOP_SANDBOX === "true" ? SANDBOX_API : PROD_API);
 export const whopCurrency = () => (process.env.WHOP_CURRENCY ?? "usd").toLowerCase();
+
+/**
+ * Where the buyer lands after paying.
+ *
+ * Whop's *plan* checkout ends on its own receipt page (`/joined/<route>/`), which
+ * is not where we want a buyer to finish. A checkout configuration for the plan
+ * takes a `redirect_url`, so that's what the stake flow hands over instead.
+ */
+export const whopReturnUrl = () => process.env.WHOP_RETURN_URL ?? "https://www.mymap.lol/";
 
 export function whopConfigured(): boolean {
   return Boolean(
@@ -63,6 +75,8 @@ export interface WhopCheckout {
   planId: string;
   purchaseUrl: string;
   currency: string;
+  /** set when a checkout configuration (the redirect-aware link) was used */
+  checkoutConfigId: string;
 }
 
 /** Create a one-time plan for this exact stake and return its hosted checkout. */
@@ -98,11 +112,80 @@ export async function createWhopCheckout(input: WhopCheckoutInput): Promise<Whop
     throw new Error(`Whop plan creation failed: ${detail}`);
   }
 
+  const planId = body.id ?? "";
+  const currency = (body.currency ?? whopCurrency()).toLowerCase();
+
+  // A plan checkout finishes on Whop's own receipt page; wrap it in a checkout
+  // configuration so the buyer comes back to mymap.lol after paying.
+  try {
+    const config = await createWhopCheckoutConfig({
+      planId,
+      redirectUrl: whopReturnUrl(),
+      metadata: input.metadata,
+    });
+    return {
+      planId,
+      purchaseUrl: config.purchase_url as string,
+      checkoutConfigId: config.id ?? "",
+      currency,
+    };
+  } catch (err) {
+    // Never lose the sale over the redirect: the plan's own checkout still works.
+    console.warn("[whop] checkout configuration unavailable — using the plan checkout:", err);
+  }
+
   return {
-    planId: body.id ?? "",
+    planId,
     purchaseUrl: body.purchase_url,
-    currency: (body.currency ?? whopCurrency()).toLowerCase(),
+    checkoutConfigId: "",
+    currency,
   };
+}
+
+export interface WhopCheckoutConfig {
+  id?: string;
+  purchase_url?: string;
+  redirect_url?: string;
+  message?: string;
+  error?: string;
+}
+
+/**
+ * Wrap the plan in a checkout configuration that returns the buyer to our site.
+ *
+ * The plan's own `purchase_url` finishes on Whop's `/joined/…` receipt page; a
+ * configuration's `purchase_url` (`/checkout/ch_…/`) sends the buyer to
+ * `redirect_url` instead. Metadata rides along too, so a payment event still
+ * carries `claim_id` even if the plan metadata ever comes back empty.
+ *
+ * Trap: this endpoint takes `plan_id` only — sending `account_id` fails with
+ * "Cannot provide company_id for this configuration".
+ */
+export async function createWhopCheckoutConfig(input: {
+  planId: string;
+  redirectUrl: string;
+  metadata: Record<string, string>;
+}): Promise<WhopCheckoutConfig> {
+  const res = await fetch(`${whopApiBase()}/checkout_configurations`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${process.env.WHOP_API_KEY}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      plan_id: input.planId,
+      redirect_url: input.redirectUrl,
+      metadata: input.metadata,
+    }),
+    cache: "no-store",
+  });
+  const body = (await res.json().catch(() => null)) as WhopCheckoutConfig | null;
+  if (!res.ok || !body?.purchase_url) {
+    throw new Error(
+      `Whop checkout configuration failed: ${body?.message ?? body?.error ?? `HTTP ${res.status}`}`,
+    );
+  }
+  return body;
 }
 
 /* ------------------------------------------------------------------ webhooks */
