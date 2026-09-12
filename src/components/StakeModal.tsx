@@ -15,6 +15,7 @@ import {
 import { checkout } from "@/lib/checkout";
 import { SOCIAL_HINT, linkLabel, normalizeLink, outboundHref, pinHref, safeHref, type ListingMode } from "@/lib/links";
 import { PRICING, money, moneyBoth, moneyMyr, stateCodeToName } from "@/lib/states";
+import OwnerHover from "@/components/OwnerPreview";
 import type { StateLeaderboard, StakeTarget } from "@/lib/types";
 
 const EMPTY_FORM = { orgName: "", pitch: "", link: "", email: "" };
@@ -348,14 +349,26 @@ export default function StakeModal({
                       <div className="min-w-0">
                         <div className="flex items-center gap-1 truncate text-[13px] font-bold text-[#1f2b3e]">
                           {/* the name opens the bidder's listing page (their link preview) */}
-                          <Link
-                            href={pinHref(h.orgName, h.link)}
-                            onClick={(e) => e.stopPropagation()}
-                            title={`${h.orgName} — listing page`}
-                            className="truncate text-[#166d4a] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
+                          <OwnerHover
+                            owner={{
+                              orgName: h.orgName,
+                              pitch: h.pitch,
+                              link: h.link,
+                              total: h.total,
+                              claims: h.claims,
+                              where: lb.name,
+                              rank: i + 1,
+                            }}
                           >
-                            {h.orgName}
-                          </Link>
+                            <Link
+                              href={pinHref(h.orgName, h.link)}
+                              onClick={(e) => e.stopPropagation()}
+                              title={`${h.orgName} — listing page`}
+                              className="truncate text-[#166d4a] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
+                            >
+                              {h.orgName}
+                            </Link>
+                          </OwnerHover>
                           {safeHref(h.link) && (
                             <a
                               href={outboundHref(h.link) ?? undefined}

@@ -3,6 +3,7 @@
 import { useMemo, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { subscribe, getVersion, linkForOrg, recentClaims } from "@/lib/store";
+import OwnerHover from "@/components/OwnerPreview";
 import { pinHref } from "@/lib/links";
 import { money } from "@/lib/states";
 import type { StakeTarget } from "@/lib/types";
@@ -70,14 +71,23 @@ export default function LiveActivity({ onPick, onClose }: Props) {
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-1 truncate text-[12px] font-bold text-[#1f2b3e]">
-                    <Link
-                      href={pinHref(it.orgName, linkForOrg(it.orgName))}
-                      onClick={(e) => e.stopPropagation()}
-                      title={`${it.orgName} — listing page`}
-                      className="truncate text-[#1f7a55] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
+                    <OwnerHover
+                      owner={{
+                        orgName: it.orgName,
+                        link: linkForOrg(it.orgName),
+                        where: it.cityId ? `${it.cityName || it.cityId} · ${it.stateName}` : it.stateName,
+                        stat: `${money(it.amount)} · this claim`,
+                      }}
                     >
-                      {it.orgName}
-                    </Link>
+                      <Link
+                        href={pinHref(it.orgName, linkForOrg(it.orgName))}
+                        onClick={(e) => e.stopPropagation()}
+                        title={`${it.orgName} — listing page`}
+                        className="truncate text-[#1f7a55] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
+                      >
+                        {it.orgName}
+                      </Link>
+                    </OwnerHover>
                     <span className="shrink-0 text-[#8494ab]">· {money(it.amount)}</span>
                   </div>
                   <div className="truncate text-[11px] font-semibold text-[#8494ab]">

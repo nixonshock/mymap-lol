@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { faviconUrl, iconUrl, linkLabel, outboundHref } from "@/lib/links";
 
-interface Preview {
+export interface Preview {
   ok: boolean;
   site: string;
   title: string;
@@ -14,24 +14,17 @@ interface Preview {
 }
 
 /**
- * The link preview behind a bidder's name.
+ * Unfurl a link through `/api/preview` (server-side, 1h cached).
  *
- * Browsers can't read another site's HTML, so the tags come from
- * `/api/preview`, which unfurls the page server-side. Until it answers (or if
- * the site has no tags at all) the card falls back to the holder's own
- * one-line pitch.
+ * Browsers can't read another site's HTML, so the tags come from that route.
+ * Keyed by URL so a stale response for a previous link can never render.
  */
-export function LinkPreviewCard({
-  link,
-  name,
-  pitch,
-}: {
-  link?: string | null;
-  name: string;
-  pitch?: string;
-}) {
+export function useLinkPreview(link?: string | null): {
+  href: string | null;
+  data: Preview | null;
+  failed: boolean;
+} {
   const href = outboundHref(link);
-  // Keyed by URL so a stale response for a previous link can never render.
   const [state, setState] = useState<{ forUrl: string; data: Preview | null; failed: boolean }>({
     forUrl: "",
     data: null,
@@ -50,9 +43,31 @@ export function LinkPreviewCard({
     return () => ctrl.abort();
   }, [href]);
 
-  const current = state.forUrl === href;
-  const data = current ? state.data : null;
-  const failed = current ? state.failed : false;
+  return {
+    href,
+    data: state.forUrl === href ? state.data : null,
+    failed: state.forUrl === href ? state.failed : false,
+  };
+}
+
+/**
+ * The link preview behind a bidder's name.
+ *
+ * Until `/api/preview` answers (or if the site has no tags at all) the card
+ * falls back to the holder's own one-line pitch.
+ */
+export function LinkPreviewCard({
+  link,
+  name,
+  pitch,
+}: {
+  link?: string | null;
+  name: string;
+  pitch?: string;
+}) {
+  const { data, failed } = useLinkPreview(link);
+  const [imageBroken, setImageBroken] = useState(false);
+  const [iconBroken, setIconBroken] = useState(false);
 
   const host = linkLabel(link);
   const icon = iconUrl(link);
@@ -61,24 +76,18 @@ export function LinkPreviewCard({
 
   return (
     <div className="overflow-hidden rounded-2xl bg-[#f7fafd] ring-1 ring-[#e5edf5]">
-      {data?.image && (
+      {data?.image && !imageBroken && (
         <img
           src={data.image}
           alt=""
-          onError={() => setState((s) => ({ ...s, data: s.data ? { ...s.data, image: null } : s.data }))}
+          onError={() => setImageBroken(true)}
           className="h-[150px] w-full object-cover"
         />
       )}
       <div className="flex gap-3 p-4">
         <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white text-[16px] font-extrabold text-[#8494ab] ring-1 ring-[#e5edf5]">
-          {icon && !failed ? (
-            <img
-              src={icon}
-              alt=""
-              width={28}
-              height={28}
-              onError={() => setState((s) => ({ ...s, failed: true }))}
-            />
+          {icon && !iconBroken ? (
+            <img src={icon} alt="" width={28} height={28} onError={() => setIconBroken(true)} />
           ) : (
             name.replace(/^@/, "").slice(0, 1).toUpperCase()
           )}

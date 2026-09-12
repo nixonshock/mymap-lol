@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { subscribe, getVersion, worldOrder, openStateCount } from "@/lib/store";
+import { subscribe, getVersion, stateLeaderboard, worldOrder, openStateCount } from "@/lib/store";
+import OwnerHover from "@/components/OwnerPreview";
 import { pinHref } from "@/lib/links";
 import { money } from "@/lib/states";
 
@@ -111,14 +112,31 @@ export default function WorldOrder({ onPick, onClose }: Props) {
                     {s.leader ? (
                       <>
                         {/* the bidder's name opens their listing page (link preview) */}
-                        <Link
-                          href={pinHref(s.leader, s.leaderLink)}
-                          onClick={(e) => e.stopPropagation()}
-                          title={`${s.leader} — listing page`}
-                          className="font-extrabold text-[#1f7a55] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
+                        <OwnerHover
+                          owner={() => {
+                            const h = stateLeaderboard(s.code).holders[0];
+                            return h
+                              ? {
+                                  orgName: h.orgName,
+                                  pitch: h.pitch,
+                                  link: h.link,
+                                  total: h.total,
+                                  claims: h.claims,
+                                  where: s.name,
+                                  rank: 1,
+                                }
+                              : null;
+                          }}
                         >
-                          {s.leader}
-                        </Link>
+                          <Link
+                            href={pinHref(s.leader, s.leaderLink)}
+                            onClick={(e) => e.stopPropagation()}
+                            title={`${s.leader} — listing page`}
+                            className="font-extrabold text-[#1f7a55] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
+                          >
+                            {s.leader}
+                          </Link>
+                        </OwnerHover>
                         <span className="text-[#b0bed0]"> · </span>
                       </>
                     ) : null}

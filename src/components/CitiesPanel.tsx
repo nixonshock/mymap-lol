@@ -5,6 +5,7 @@ import Link from "next/link";
 import { STATES, money, stateCodeToName } from "@/lib/states";
 import { subscribe, getVersion, addCity, allCities, cityTotals, topHolderForCity } from "@/lib/store";
 import { linkLabel, pinHref, safeHref } from "@/lib/links";
+import OwnerHover from "@/components/OwnerPreview";
 import type { City } from "@/lib/cities";
 import type { StakeTarget } from "@/lib/types";
 
@@ -197,14 +198,26 @@ function CityRow({
         </span>
         {total > 0 && holder && (
           <span className="mt-0.5 flex items-baseline gap-1.5">
-            <Link
-              href={pinHref(holder.orgName, holder.link)}
-              onClick={(e) => e.stopPropagation()}
-              title={`${holder.orgName} — listing page`}
-              className="truncate text-[11px] font-extrabold text-[#1f7a55] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
+            <OwnerHover
+              owner={{
+                orgName: holder.orgName,
+                pitch: holder.pitch,
+                link: holder.link,
+                total,
+                claims: holder.claims,
+                where: city.name,
+                rank: 1,
+              }}
             >
-              {holder.orgName}
-            </Link>
+              <Link
+                href={pinHref(holder.orgName, holder.link)}
+                onClick={(e) => e.stopPropagation()}
+                title={`${holder.orgName} — listing page`}
+                className="truncate text-[11px] font-extrabold text-[#1f7a55] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
+              >
+                {holder.orgName}
+              </Link>
+            </OwnerHover>
             {site && (
               <span className="truncate text-[10.5px] font-semibold text-[#8494ab]">· {site}</span>
             )}
