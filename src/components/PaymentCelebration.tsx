@@ -182,7 +182,7 @@ export default function PaymentCelebration({
             {facts.orgName} · {moneyBoth(facts.amount)} placement
           </p>
           <p className="mx-auto mt-3 max-w-[19rem] text-[12.5px] leading-relaxed text-[#6b7c93]">
-            Payment received — your name is in the World Order and the{" "}
+            Payment received — your name is in the MY Order and the{" "}
             {facts.cityName ? "city" : "state"} now carries your colour. Top up any time to hold the crown.
           </p>
 

@@ -68,7 +68,7 @@ export default function Home() {
             onClick={() => setSheet("order")}
             className="rounded-full bg-white/95 px-4 py-2 text-[13px] font-bold text-[#1f2b3e] shadow-lg ring-1 ring-[#e5edf5]"
           >
-            🇲🇾 World Order
+            🇲🇾 MY ORDER
           </button>
           <button
             type="button"
