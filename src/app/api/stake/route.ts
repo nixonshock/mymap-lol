@@ -7,7 +7,7 @@ import {
   whopConfigured,
   whopCurrency,
 } from "@/lib/payments/whop";
-import { PRICING, stateCodeToName } from "@/lib/states";
+import { PRICING, STATES, stateCodeToName } from "@/lib/states";
 
 export const dynamic = "force-dynamic";
 
@@ -82,7 +82,19 @@ function parseLink(v: unknown): string | null {
  */
 export async function POST(req: NextRequest) {
   const sb = serviceClient();
-  if (!sb) {
+  const paymentMode = process.env.NEXT_PUBLIC_PAYMENT_MODE ?? "demo";
+
+  /**
+   * Sandbox dry run — Whop sandbox testing before Supabase is wired.
+   *
+   * It requires `WHOP_SANDBOX=true`, which pins the API base to Whop's sandbox
+   * (a promise that no real money moves), and it stores nothing: the buyer is
+   * still handed to a real hosted checkout, but with no claim row no webhook can
+   * ever flip a stake to `paid`. Delete the flags (and this branch) once
+   * Supabase is configured — then the row-parking path below takes over.
+   */
+  const sandboxDryRun = !sb && paymentMode === "live" && process.env.WHOP_SANDBOX === "true";
+  if (!sb && !sandboxDryRun) {
     return json(
       { ok: false, mode: "demo", message: "Shared backend not configured yet." },
       503,
@@ -131,36 +143,44 @@ export async function POST(req: NextRequest) {
   }
 
   // The state must exist (FK would also catch it; this gives a clean error).
-  const { data: state, error: stateErr } = await sb
-    .from("states")
-    .select("code")
-    .eq("code", stateCode)
-    .maybeSingle();
-  if (stateErr) {
-    console.error("[api/stake] state lookup failed:", stateErr.message);
-    return json({ ok: false, message: "Backend unavailable — try again." }, 503);
+  if (sb) {
+    const { data: state, error: stateErr } = await sb
+      .from("states")
+      .select("code")
+      .eq("code", stateCode)
+      .maybeSingle();
+    if (stateErr) {
+      console.error("[api/stake] state lookup failed:", stateErr.message);
+      return json({ ok: false, message: "Backend unavailable — try again." }, 503);
+    }
+    if (!state) return json({ ok: false, message: "Unknown state." }, 400);
+  } else if (!STATES.some((s) => s.code === stateCode)) {
+    return json({ ok: false, message: "Unknown state." }, 400);
   }
-  if (!state) return json({ ok: false, message: "Unknown state." }, 400);
 
   // --- abuse control: hashed IP, never the raw address
   const fwd = req.headers.get("x-forwarded-for") ?? "";
   const ip = fwd.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";
   const ipHash = sha256(`${process.env.IP_SALT ?? "mymap-lol"}:${ip}`);
 
-  const since = new Date(Date.now() - 3_600_000).toISOString();
-  const { count } = await sb
-    .from("stake_events")
-    .select("id", { count: "exact", head: true })
-    .eq("ip_hash", ipHash)
-    .gte("created_at", since);
-  if ((count ?? 0) >= MAX_ATTEMPTS_PER_HOUR) {
-    return json({ ok: false, message: "Too many attempts from this connection — try later." }, 429);
+  if (sb) {
+    const since = new Date(Date.now() - 3_600_000).toISOString();
+    const { count } = await sb
+      .from("stake_events")
+      .select("id", { count: "exact", head: true })
+      .eq("ip_hash", ipHash)
+      .gte("created_at", since);
+    if ((count ?? 0) >= MAX_ATTEMPTS_PER_HOUR) {
+      return json({ ok: false, message: "Too many attempts from this connection — try later." }, 429);
+    }
+    await sb.from("stake_events").insert({ ip_hash: ipHash, kind: "stake" });
   }
-  await sb.from("stake_events").insert({ ip_hash: ipHash, kind: "stake" });
 
   // --- payment path
-  const paymentMode = process.env.NEXT_PUBLIC_PAYMENT_MODE ?? "demo";
   const editToken = randomBytes(18).toString("base64url");
+  if (sandboxDryRun) {
+    console.warn("[api/stake] Whop SANDBOX dry run — no claim stored for", stateCode, orgName);
+  }
   const targetLabel = cityName
     ? `${cityName} · ${stateCodeToName(stateCode)}`
     : stateCodeToName(stateCode);
@@ -182,29 +202,37 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Park the stake as `pending` — the webhook is what flips it to `paid`.
-    const { data: pending, error: pendingErr } = await sb
-      .from("claims")
-      .insert({
-        state_code: stateCode,
-        city_id: cityId,
-        city_name: cityName,
-        org_name: orgName,
-        pitch,
-        link,
-        amount_cents: chargeCents,
-        currency,
-        status: "pending",
-        provider: "whop",
-        org_email: email || null,
-        edit_token_hash: sha256(editToken),
-        ip_hash: ipHash,
-      })
-      .select("id")
-      .single();
+    //    A sandbox dry run has no database, so it only mints the reference id
+    //    that gets stamped on the plan; the row arrives with Supabase.
+    let claimId: string;
+    if (sb) {
+      const { data: pending, error: pendingErr } = await sb
+        .from("claims")
+        .insert({
+          state_code: stateCode,
+          city_id: cityId,
+          city_name: cityName,
+          org_name: orgName,
+          pitch,
+          link,
+          amount_cents: chargeCents,
+          currency,
+          status: "pending",
+          provider: "whop",
+          org_email: email || null,
+          edit_token_hash: sha256(editToken),
+          ip_hash: ipHash,
+        })
+        .select("id")
+        .single();
 
-    if (pendingErr || !pending) {
-      console.error("[api/stake] pending insert failed:", pendingErr?.message);
-      return json({ ok: false, message: "Could not open the checkout — try again." }, 503);
+      if (pendingErr || !pending) {
+        console.error("[api/stake] pending insert failed:", pendingErr?.message);
+        return json({ ok: false, message: "Could not open the checkout — try again." }, 503);
+      }
+      claimId = pending.id;
+    } else {
+      claimId = `sandbox_${randomBytes(6).toString("hex")}`;
     }
 
     // 2. One one-time plan for this exact stake → Whop's hosted checkout.
@@ -214,7 +242,7 @@ export async function POST(req: NextRequest) {
         title: `${targetLabel} — ${currency} ${chargeMajor} placement`,
         description: whopDescription({ orgName, link, targetLabel }),
         metadata: {
-          claim_id: pending.id,
+          claim_id: claimId,
           state_code: stateCode,
           city_id: cityId ?? "",
           org_name: orgName,
@@ -223,14 +251,17 @@ export async function POST(req: NextRequest) {
 
       // Remember the plan id so a webhook can still find this row if metadata
       // ever comes through empty.
-      await sb.from("claims").update({ tx_id: checkout.planId || null }).eq("id", pending.id);
+      if (sb) {
+        await sb.from("claims").update({ tx_id: checkout.planId || null }).eq("id", claimId);
+      }
 
       return json({
         ok: true,
         mode: "live",
         pending: true,
+        sandboxTest: sandboxDryRun || undefined,
         checkoutUrl: checkout.purchaseUrl,
-        id: pending.id,
+        id: claimId,
         stateCode,
         cityId,
         cityName,
@@ -240,10 +271,17 @@ export async function POST(req: NextRequest) {
         message: "Opening secure checkout…",
       });
     } catch (err) {
-      await sb.from("claims").delete().eq("id", pending.id);
+      if (sb) await sb.from("claims").delete().eq("id", claimId);
       console.error("[api/stake] whop checkout failed:", err);
       return json({ ok: false, message: "Could not open the checkout — try again." }, 502);
     }
+  }
+
+  // Unreachable in practice: without Supabase the only way past the guard at the
+  // top is the live sandbox dry run, which returned above. This keeps the demo
+  // write below honest about needing a database.
+  if (!sb) {
+    return json({ ok: false, mode: "demo", message: "Shared backend not configured yet." }, 503);
   }
 
   const { data, error } = await sb

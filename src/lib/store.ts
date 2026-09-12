@@ -589,7 +589,11 @@ export async function applyPaidClaim(
   claim: Omit<Claim, "id" | "at" | "status">,
   opts?: { email?: string },
 ): Promise<StakeResult> {
-  if (isLive()) {
+  // Live payments can be switched on before the shared board exists: the Whop
+  // sandbox dry run (server side) hands the buyer to a hosted checkout and
+  // stores nothing, so the stake must still be routed to /api/stake here.
+  const livePayments = process.env.NEXT_PUBLIC_PAYMENT_MODE === "live";
+  if (isLive() || livePayments) {
     try {
       const res = await fetch("/api/stake", {
         method: "POST",
