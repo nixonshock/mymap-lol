@@ -15,8 +15,8 @@ interface Props {
   onSelect: (code: string) => void;
   /** city whose pin should read as selected */
   selectedCityId?: string | null;
-  /** a city pin was clicked → the board shows that city's bids */
-  onSelectCity?: (id: string) => void;
+  /** a city pin was clicked → open that city's dialog (its bids + the way in) */
+  onOpenCity?: (id: string) => void;
 }
 
 interface FeatureWithProps extends MapFeature {
@@ -45,7 +45,7 @@ function hrefFrom(target: EventTarget | null): string | null {
   return el.closest("[data-href]")?.getAttribute("data-href") ?? null;
 }
 
-export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, onSelectCity }: Props) {
+export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, onOpenCity }: Props) {
   const version = useSyncExternalStore(subscribe, getVersion, getVersion);
   const [geojson, setGeojson] = useState<FeatureCollection | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
@@ -451,9 +451,9 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
                     cityLeaveTimer.current = window.setTimeout(() => setCityHover(null), 140);
                   }}
                   onClick={() => {
-                    if (dragging || !onSelectCity) return;
+                    if (dragging || !onOpenCity) return;
                     setCityHover(null);
-                    onSelectCity(c.id);
+                    onOpenCity(c.id);
                   }}
                 />
               </g>
@@ -464,7 +464,7 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
 
       {/* interaction hint + legend */}
       <div className="pointer-events-none absolute bottom-3 left-3 rounded-2xl border border-[#dfe7f0] bg-white/90 px-3 py-1.5 text-[11px] font-bold text-[#5b6b7e] shadow-lg">
-        <div>drag to pan · scroll to zoom · click a state</div>
+        <div>drag to pan · scroll to zoom · click a state or a city dot</div>
         <div className="mt-0.5 font-semibold text-[#8494ab]">
           white = open for claiming · coloured = already taken
         </div>

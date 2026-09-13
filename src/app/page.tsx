@@ -73,7 +73,8 @@ export default function Home() {
           selectedCode={selection?.kind === "state" ? selection.code : null}
           onSelect={pickState}
           selectedCityId={selection?.kind === "city" ? selection.code : null}
-          onSelectCity={selectCity}
+          // a city pin opens that city's dialog — its bids and the way in, in one step
+          onOpenCity={(id) => openStake({ kind: "city", code: id })}
         />
       </div>
 
