@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useCallback, useEffect, useRef, useState, type ElementType, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Favicon, useLinkPreview } from "@/components/LinkPreview";
 import { linkLabel, outboundHref, pinHref } from "@/lib/links";
 import { money } from "@/lib/states";
@@ -146,22 +146,29 @@ function OwnerCard({
 }
 
 /**
- * Wrap a name so hovering (or focusing) it previews the owner.
+ * Wrap a name — or a whole row — so hovering (or focusing) it previews the owner.
  *
  * Pass an object, or a getter when the data is worth computing only on hover —
  * and `null`/`false` when there is no owner behind the element yet.
+ *
+ * The whole row is the hover target (worldmap.lol previews the record, not just
+ * the name), so callers pass `className="block w-full"` — or `as="li"` when the
+ * row is a list item.
  */
 export function OwnerHover({
   owner,
   children,
   className = "inline-flex min-w-0 max-w-full align-baseline",
+  as,
 }: {
   owner: OwnerPreviewData | null | (() => OwnerPreviewData | null);
   children: ReactNode;
   /** lets a caller make the hover target a whole row instead of an inline name */
   className?: string;
+  /** what the hover target renders as — `span` (inline name) by default */
+  as?: ElementType;
 }) {
-  const anchor = useRef<HTMLSpanElement | null>(null);
+  const anchor = useRef<HTMLElement | null>(null);
   const [data, setData] = useState<OwnerPreviewData | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const openTimer = useRef<number | null>(null);
@@ -220,12 +227,14 @@ export function OwnerHover({
     };
   }, [data]);
 
+  const Tag = (as ?? "span") as ElementType;
+
   return (
     <>
-      <span
+      <Tag
         ref={anchor}
         className={className}
-        onPointerEnter={(e) => {
+        onPointerEnter={(e: ReactPointerEvent<HTMLElement>) => {
           // A finger is not a hover: on touch the row's own tap is the way in, and
           // a tap would otherwise flash the card open just before navigating.
           if (e.pointerType === "touch") return;
@@ -236,7 +245,7 @@ export function OwnerHover({
         onBlur={hide}
       >
         {children}
-      </span>
+      </Tag>
       {data && pos && typeof document !== "undefined"
         ? createPortal(
             <OwnerCard data={data} pos={pos} onEnter={cancelClose} onLeave={hide} />,

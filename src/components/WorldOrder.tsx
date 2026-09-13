@@ -159,27 +159,49 @@ export default function WorldOrder({ selection, onSelect, onClaim, onBack, onClo
     i: number,
   ) => {
     const top = i === 0;
+    // The #1 bidder behind this territory — resolved on hover for a state
+    // (cheap enough for 10 rows, but no reason to compute it up front).
+    const owner = leader
+      ? kind === "city"
+        ? { orgName: leader, pitch: "", link: leaderLink, where: name, rank: 1 }
+        : () => {
+            const h = stateLeaderboard(code).holders[0];
+            return h
+              ? {
+                  orgName: h.orgName,
+                  pitch: h.pitch,
+                  link: h.link,
+                  total: h.total,
+                  claims: h.claims,
+                  where: name,
+                  rank: 1,
+                }
+              : null;
+          }
+      : null;
     return (
-      <div
-        key={`${kind}:${code}`}
-        role="button"
-        tabIndex={0}
-        aria-label={`See the bids on ${name}`}
-        onClick={() => {
-          collapse();
-          onSelect({ kind, code });
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
+      /* the whole row is the hover target — worldmap.lol previews the record,
+         not just the name inside it */
+      <OwnerHover key={`${kind}:${code}`} className="block w-full" owner={owner}>
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label={`See the bids on ${name}`}
+          onClick={() => {
             collapse();
             onSelect({ kind, code });
-          }
-        }}
-        className={`flex w-full cursor-pointer items-center gap-3 rounded-2xl px-3 py-2 text-left transition ${
-          top ? "bg-[#fff7e0] ring-1 ring-[#ffe3a1]" : "bg-[#f2f7fc] hover:bg-[#e9f1f9]"
-        }`}
-      >
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              collapse();
+              onSelect({ kind, code });
+            }
+          }}
+          className={`flex w-full cursor-pointer items-center gap-3 rounded-2xl px-3 py-2 text-left transition ${
+            top ? "bg-[#fff7e0] ring-1 ring-[#ffe3a1]" : "bg-[#f2f7fc] hover:bg-[#e9f1f9]"
+          }`}
+        >
         <span
           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-bold ${
             top ? "bg-[#ffc93c] text-[#4a3400]" : "bg-white text-[#8494ab] ring-1 ring-[#e5edf5]"
@@ -195,36 +217,16 @@ export default function WorldOrder({ selection, onSelect, onClaim, onBack, onClo
           <div className="truncate text-[11px] font-semibold text-[#8494ab]">
             {leader ? (
               <>
-                {/* the bidder's name opens their listing page (link preview) */}
-                <OwnerHover
-                  owner={
-                    kind === "city"
-                      ? { orgName: leader, pitch: "", link: leaderLink, where: name, rank: 1 }
-                      : () => {
-                          const h = stateLeaderboard(code).holders[0];
-                          return h
-                            ? {
-                                orgName: h.orgName,
-                                pitch: h.pitch,
-                                link: h.link,
-                                total: h.total,
-                                claims: h.claims,
-                                where: name,
-                                rank: 1,
-                              }
-                            : null;
-                        }
-                  }
+                {/* the bidder's name opens their listing page (link preview);
+                    the row itself is the hover target (see OwnerHover above) */}
+                <Link
+                  href={pinHref(leader, leaderLink)}
+                  onClick={(e) => e.stopPropagation()}
+                  title={`${leader} — listing page`}
+                  className="font-extrabold text-[#1f7a55] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
                 >
-                  <Link
-                    href={pinHref(leader, leaderLink)}
-                    onClick={(e) => e.stopPropagation()}
-                    title={`${leader} — listing page`}
-                    className="font-extrabold text-[#1f7a55] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
-                  >
-                    {leader}
-                  </Link>
-                </OwnerHover>
+                  {leader}
+                </Link>
                 <span className="text-[#b0bed0]"> · </span>
               </>
             ) : null}
@@ -232,7 +234,8 @@ export default function WorldOrder({ selection, onSelect, onClaim, onBack, onClo
           </div>
         </div>
         <div className="shrink-0 text-[14px] font-extrabold tabular-nums text-[#1f7a55]">{money(total)}</div>
-      </div>
+        </div>
+      </OwnerHover>
     );
   };
 

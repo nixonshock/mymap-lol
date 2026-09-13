@@ -332,11 +332,22 @@ export default function StakeModal({
             ) : (
               <ol className="mt-2 space-y-1.5">
                 {lb.holders.slice(0, 8).map((h, i) => (
-                  <li
+                  /* the whole row previews the bidder — hover the record, not just the name */
+                  <OwnerHover
                     key={h.orgName}
+                    as="li"
                     className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 ${
                       i === 0 ? "bg-[#fff7e0] ring-1 ring-[#ffe3a1]" : "bg-[#f2f7fc]"
                     }`}
+                    owner={{
+                      orgName: h.orgName,
+                      pitch: h.pitch,
+                      link: h.link,
+                      total: h.total,
+                      claims: h.claims,
+                      where: lb.name,
+                      rank: i + 1,
+                    }}
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
                       <span
@@ -348,27 +359,16 @@ export default function StakeModal({
                       </span>
                       <div className="min-w-0">
                         <div className="flex items-center gap-1 truncate text-[13px] font-bold text-[#1f2b3e]">
-                          {/* the name opens the bidder's listing page (their link preview) */}
-                          <OwnerHover
-                            owner={{
-                              orgName: h.orgName,
-                              pitch: h.pitch,
-                              link: h.link,
-                              total: h.total,
-                              claims: h.claims,
-                              where: lb.name,
-                              rank: i + 1,
-                            }}
+                          {/* the name opens the bidder's listing page (their link
+                              preview); the row itself is the hover target */}
+                          <Link
+                            href={pinHref(h.orgName, h.link)}
+                            onClick={(e) => e.stopPropagation()}
+                            title={`${h.orgName} — listing page`}
+                            className="truncate text-[#166d4a] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
                           >
-                            <Link
-                              href={pinHref(h.orgName, h.link)}
-                              onClick={(e) => e.stopPropagation()}
-                              title={`${h.orgName} — listing page`}
-                              className="truncate text-[#166d4a] underline decoration-[#9fd0b9] underline-offset-2 transition hover:text-[#0f5c3c]"
-                            >
-                              {h.orgName}
-                            </Link>
-                          </OwnerHover>
+                            {h.orgName}
+                          </Link>
                           {safeHref(h.link) && (
                             <a
                               href={outboundHref(h.link) ?? undefined}
@@ -392,7 +392,7 @@ export default function StakeModal({
                     <div className="shrink-0 text-[13px] font-extrabold tabular-nums text-[#1f7a55]">
                       {money(h.total)}
                     </div>
-                  </li>
+                  </OwnerHover>
                 ))}
               </ol>
             )}
