@@ -570,13 +570,19 @@ export function pinSnapshot(slug: string): PinProfile | null {
   return value;
 }
 
-/** Minimum you must pay now so that `orgName`'s total takes the #1 spot. */
+/**
+ * Minimum you must pay now so that `orgName`'s total takes the #1 spot.
+ *
+ * Never below `PRICING.minClaim`: a payment smaller than the floor is refused by
+ * `/api/stake`, so suggesting "top up $2" for a $2 gap would offer the visitor a
+ * figure the server rejects.
+ */
 export function minimumToOvertake(lb: StateLeaderboard, orgName: string): number {
   if (lb.isEmpty) return PRICING.minClaim;
   const mine = findHolder(lb, orgName)?.total ?? 0;
   const leader = lb.holders[0]?.total ?? 0;
   if (mine >= leader) return PRICING.minClaim; // already #1 → any add keeps it
-  return leader - mine + PRICING.minToOvertake;
+  return Math.max(PRICING.minClaim, leader - mine + PRICING.minToOvertake);
 }
 
 // ---------------------------------------------------------------- mutations

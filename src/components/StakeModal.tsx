@@ -81,7 +81,13 @@ export default function StakeModal({
    */
   const claimName = mine?.orgName || displayName;
 
-  const isInvalid = !displayName || !form.pitch.trim() || amount < 1 || Boolean(normalized.error);
+  /** A payment is never smaller than the floor, so neither is the form. */
+  const belowMin = amount > 0 && amount < PRICING.minClaim;
+  /** What the CTA would actually charge — never below the floor. */
+  const chargeAmount = Math.max(amount || suggested, PRICING.minClaim);
+
+  const isInvalid =
+    !displayName || !form.pitch.trim() || amount < PRICING.minClaim || Boolean(normalized.error);
 
   async function submit() {
     setBusy(true);
@@ -267,7 +273,8 @@ export default function StakeModal({
             <div className="flex items-center gap-2">
               <input
                 type="number"
-                min={1}
+                min={PRICING.minClaim}
+                step={1}
                 value={amountFollows ? String(suggested) : amountInput ?? ""}
                 onChange={(e) => setAmountInput(e.target.value)}
                 placeholder={String(suggested)}
@@ -276,9 +283,15 @@ export default function StakeModal({
               <span className="shrink-0 text-[12px] font-bold text-[#8494ab]">USD</span>
             </div>
             <div className="flex items-center justify-between gap-3 text-[11px] font-semibold text-[#8494ab]">
-              <span>
-                charged as {money(amount)} · {moneyMyr(amount)}
-              </span>
+              {belowMin ? (
+                <span className="font-extrabold text-[#c0392b]">
+                  minimum {moneyBoth(PRICING.minClaim)}
+                </span>
+              ) : (
+                <span>
+                  charged as {money(amount)} · {moneyMyr(amount)}
+                </span>
+              )}
               {/* Edited away from the suggestion? One tap puts back the exact
                   amount that takes #1 (or the $10 floor when already #1). */}
               {!amountFollows && amount !== suggested && (
@@ -422,7 +435,7 @@ export default function StakeModal({
               ? "Opening secure checkout…"
               : busy
                 ? "Processing…"
-                : `${lb.isEmpty ? "Claim" : "Stake"} ${lb.name} — ${moneyBoth(amount || suggested)}`}
+                : `${lb.isEmpty ? "Claim" : "Stake"} ${lb.name} — ${moneyBoth(chargeAmount)}`}
           </button>
           <button
             type="button"
