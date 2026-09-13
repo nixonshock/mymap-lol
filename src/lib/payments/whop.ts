@@ -110,8 +110,7 @@ export async function createWhopCheckout(input: WhopCheckoutInput): Promise<Whop
     | null;
 
   if (!res.ok || !body?.purchase_url) {
-    const detail = body?.message ?? body?.error ?? `HTTP ${res.status}`;
-    throw new Error(`Whop plan creation failed: ${detail}`);
+    throw new Error(`Whop plan creation failed: ${whopErrorDetail(body, res.status)}`);
   }
 
   const planId = body.id ?? "";
@@ -183,11 +182,29 @@ export async function createWhopCheckoutConfig(input: {
   });
   const body = (await res.json().catch(() => null)) as WhopCheckoutConfig | null;
   if (!res.ok || !body?.purchase_url) {
-    throw new Error(
-      `Whop checkout configuration failed: ${body?.message ?? body?.error ?? `HTTP ${res.status}`}`,
-    );
+    throw new Error(`Whop checkout configuration failed: ${whopErrorDetail(body, res.status)}`);
   }
   return body;
+}
+
+/**
+ * Whop reports failures as `{"error":{"type":"…","message":"…"}}` — interpolating
+ * `body.error` directly prints "[object Object]" and throws away the one sentence
+ * that says why the plan or configuration was refused.
+ */
+function whopErrorDetail(body: unknown, status: number): string {
+  const b = body as { error?: unknown; message?: unknown } | null;
+  const err = b?.error;
+  if (typeof err === "string" && err) return err;
+  if (err && typeof err === "object") {
+    const e = err as { message?: unknown; type?: unknown; code?: unknown };
+    const parts = [e.type, e.code, e.message].filter(
+      (v): v is string => typeof v === "string" && v.length > 0,
+    );
+    if (parts.length) return parts.join(" · ");
+  }
+  if (typeof b?.message === "string" && b.message) return b.message;
+  return `HTTP ${status}`;
 }
 
 /* ------------------------------------------------------------------ webhooks */
