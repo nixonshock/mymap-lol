@@ -16,6 +16,7 @@ import { checkout } from "@/lib/checkout";
 import { SOCIAL_HINT, linkLabel, normalizeLink, outboundHref, pinHref, safeHref, type ListingMode } from "@/lib/links";
 import { PRICING, money, moneyBoth, moneyMyr, stateCodeToName } from "@/lib/states";
 import OwnerHover from "@/components/OwnerPreview";
+import { rankSize } from "@/lib/rank";
 import type { StateLeaderboard, StakeTarget } from "@/lib/types";
 
 const EMPTY_FORM = { orgName: "", pitch: "", link: "", email: "" };
@@ -351,14 +352,18 @@ export default function StakeModal({
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
                       <span
-                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-bold ${
                           i === 0 ? "bg-[#ffc93c] text-[#4a3400]" : "bg-white text-[#8494ab] ring-1 ring-[#e5edf5]"
                         }`}
+                        style={{ fontSize: rankSize(i + 1, 11) }}
                       >
                         {i + 1}
                       </span>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-1 truncate text-[13px] font-bold text-[#1f2b3e]">
+                        <div
+                          className="flex items-center gap-1 truncate font-bold text-[#1f2b3e]"
+                          style={{ fontSize: rankSize(i + 1, 13) }}
+                        >
                           {/* the name opens the bidder's listing page (their link
                               preview); the row itself is the hover target */}
                           <Link
@@ -384,12 +389,18 @@ export default function StakeModal({
                           )}
                           {i === 0 && <span aria-label="top holder">👑</span>}
                         </div>
-                        <div className="truncate text-[11px] font-semibold text-[#8494ab]">
+                        <div
+                          className="truncate font-semibold text-[#8494ab]"
+                          style={{ fontSize: rankSize(i + 1, 11) }}
+                        >
                           {[h.pitch, linkLabel(h.link)].filter(Boolean).join(" · ")}
                         </div>
                       </div>
                     </div>
-                    <div className="shrink-0 text-[13px] font-extrabold tabular-nums text-[#1f7a55]">
+                    <div
+                      className="shrink-0 font-extrabold tabular-nums text-[#1f7a55]"
+                      style={{ fontSize: rankSize(i + 1, 13) }}
+                    >
                       {money(h.total)}
                     </div>
                   </OwnerHover>

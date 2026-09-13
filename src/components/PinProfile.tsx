@@ -17,6 +17,7 @@ import { PRICING, STATES, money, moneyBoth } from "@/lib/states";
 import { iconUrl, linkLabel, outboundHref, pinHref } from "@/lib/links";
 import { Favicon, useLinkPreview } from "@/components/LinkPreview";
 import { PinMap, StateShape } from "@/components/PinMap";
+import { rankSize } from "@/lib/rank";
 
 /**
  * The public page every listing gets — worldmap.lol's `/pin/<site>`.
@@ -282,13 +283,17 @@ export default function PinProfile({ slug }: { slug: string }) {
                       key={`${h.orgName}-${i}`}
                       href={pinHref(h.orgName, h.link)}
                       title={`${h.orgName} — listing page`}
-                      className={`flex items-center gap-2.5 rounded-[8px] px-2 py-1.5 text-[13px] font-extrabold text-[#1f2b3e] transition ${
+                      style={{ fontSize: rankSize(i + 1, 13) }}
+                      className={`flex items-center gap-2.5 rounded-[8px] px-2 py-1.5 font-extrabold text-[#1f2b3e] transition ${
                         isHere
                           ? "bg-[linear-gradient(90deg,rgba(255,201,60,0.2),transparent)] shadow-[inset_2px_0_0_#e0a900]"
                           : "hover:bg-[#f2f7fc]"
                       }`}
                     >
-                      <span className="font-display w-[26px] shrink-0 text-[12.5px] font-bold text-[#8494ab]">
+                      <span
+                        className="font-display w-[26px] shrink-0 font-bold text-[#8494ab]"
+                        style={{ fontSize: rankSize(i + 1, 12) }}
+                      >
                         {i === 0 ? "👑" : `#${i + 1}`}
                       </span>
                       <Favicon link={h.link} size={18} />

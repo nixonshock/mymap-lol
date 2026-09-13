@@ -16,6 +16,7 @@ import {
 } from "@/lib/store";
 import OwnerHover from "@/components/OwnerPreview";
 import { pinHref } from "@/lib/links";
+import { rankSize } from "@/lib/rank";
 import { PRICING, money, moneyBoth, stateCodeToName } from "@/lib/states";
 import type { HolderRow } from "@/lib/types";
 
@@ -117,14 +118,18 @@ export default function WorldOrder({ selection, onSelect, onClaim, onBack, onClo
           }`}
         >
           <span
-            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-bold ${
               top ? "bg-[#ffc93c] text-[#4a3400]" : "bg-white text-[#8494ab] ring-1 ring-[#e5edf5]"
             }`}
+            style={{ fontSize: rankSize(rankNo, 11) }}
           >
             {rankNo}
           </span>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1 truncate text-[13px] font-bold text-[#1f2b3e]">
+            <div
+              className="flex items-center gap-1 truncate font-bold text-[#1f2b3e]"
+              style={{ fontSize: rankSize(rankNo, 13) }}
+            >
               <Link
                 href={pinHref(h.orgName, h.link)}
                 onClick={(e) => e.stopPropagation()}
@@ -135,13 +140,18 @@ export default function WorldOrder({ selection, onSelect, onClaim, onBack, onClo
               </Link>
               {top && <span aria-label="top holder">👑</span>}
             </div>
-            <div className="truncate text-[11px] font-semibold text-[#8494ab]">
+            <div
+              className="truncate font-semibold text-[#8494ab]"
+              style={{ fontSize: rankSize(rankNo, 11) }}
+            >
               {[h.pitch, h.link ? h.link.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "") : null]
                 .filter(Boolean)
                 .join(" · ") || "no pitch yet"}
             </div>
           </div>
-          <div className="shrink-0 text-[13px] font-extrabold tabular-nums text-[#1f7a55]">{money(h.total)}</div>
+          <div className="shrink-0 font-extrabold tabular-nums text-[#1f7a55]" style={{ fontSize: rankSize(rankNo, 13) }}>
+            {money(h.total)}
+          </div>
         </div>
       </OwnerHover>
     );
@@ -203,18 +213,25 @@ export default function WorldOrder({ selection, onSelect, onClaim, onBack, onClo
           }`}
         >
         <span
-          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-bold ${
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-bold ${
             top ? "bg-[#ffc93c] text-[#4a3400]" : "bg-white text-[#8494ab] ring-1 ring-[#e5edf5]"
           }`}
+          style={{ fontSize: rankSize(i + 1, 12) }}
         >
           {i + 1}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1 truncate text-[14px] font-bold text-[#1f2b3e]">
+          <div
+            className="flex items-center gap-1 truncate font-bold text-[#1f2b3e]"
+            style={{ fontSize: rankSize(i + 1, 14) }}
+          >
             {name}
             {top && <span aria-label="top territory">👑</span>}
           </div>
-          <div className="truncate text-[11px] font-semibold text-[#8494ab]">
+          <div
+            className="truncate font-semibold text-[#8494ab]"
+            style={{ fontSize: rankSize(i + 1, 11) }}
+          >
             {leader ? (
               <>
                 {/* the bidder's name opens their listing page (link preview);
@@ -233,7 +250,12 @@ export default function WorldOrder({ selection, onSelect, onClaim, onBack, onClo
             {sub}
           </div>
         </div>
-        <div className="shrink-0 text-[14px] font-extrabold tabular-nums text-[#1f7a55]">{money(total)}</div>
+        <div
+          className="shrink-0 font-extrabold tabular-nums text-[#1f7a55]"
+          style={{ fontSize: rankSize(i + 1, 14) }}
+        >
+          {money(total)}
+        </div>
         </div>
       </OwnerHover>
     );

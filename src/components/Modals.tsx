@@ -6,6 +6,7 @@ import { STATES, money } from "@/lib/states";
 import { globalTopOrgs, linkForOrg } from "@/lib/store";
 import { pinHref } from "@/lib/links";
 import { Favicon } from "@/components/LinkPreview";
+import { rankSize } from "@/lib/rank";
 
 /** Shared modal shell (worldmap.lol style: dimmed overlay + white rounded card). */
 function Shell({
@@ -126,9 +127,10 @@ export function BoardModal({ onClose }: { onClose: () => void }) {
               >
                 <div className="flex min-w-0 items-center gap-2.5">
                   <span
-                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-bold ${
                       i === 0 ? "bg-[#ffc93c] text-[#4a3400]" : "bg-white text-[#8494ab] ring-1 ring-[#e5edf5]"
                     }`}
+                    style={{ fontSize: rankSize(i + 1, 11) }}
                   >
                     {i + 1}
                   </span>
@@ -136,7 +138,8 @@ export function BoardModal({ onClose }: { onClose: () => void }) {
                   <Link
                     href={pinHref(o.orgName, linkForOrg(o.orgName))}
                     title={`${o.orgName} — listing page`}
-                    className="truncate text-[13px] font-bold text-[#1f2b3e] underline decoration-[#dfe7f0] underline-offset-2 transition hover:text-[#166d4a]"
+                    className="truncate font-bold text-[#1f2b3e] underline decoration-[#dfe7f0] underline-offset-2 transition hover:text-[#166d4a]"
+                    style={{ fontSize: rankSize(i + 1, 13) }}
                   >
                     {o.orgName}
                   </Link>
@@ -144,7 +147,10 @@ export function BoardModal({ onClose }: { onClose: () => void }) {
                     {o.states} {o.states === 1 ? "state" : "states"}
                   </span>
                 </div>
-                <div className="shrink-0 text-[13px] font-extrabold tabular-nums text-[#1f7a55]">
+                <div
+                  className="shrink-0 font-extrabold tabular-nums text-[#1f7a55]"
+                  style={{ fontSize: rankSize(i + 1, 13) }}
+                >
                   {money(o.total)}
                 </div>
               </li>
