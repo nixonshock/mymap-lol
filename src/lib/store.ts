@@ -760,11 +760,16 @@ export function consumePaidReturn(): PaidReturn | null {
       snapshot = buildLocalSnapshot(localClaims);
       emit();
     }
-  } else {
-    // Live board: the claim is a real row, marked paid by the webhook a moment
-    // from now — watch for it so the map colours in while the buyer is looking.
-    watchForPaidClaim(stateCode, cityIdValue, orgName);
   }
+
+  // …and pin the board to this claim either way. On a live board the row exists
+  // and the webhook marks it paid a moment from now, so the map has to colour in
+  // while the buyer is looking. This cannot be a branch on `isLive()`: on a cold
+  // load the first snapshot has not arrived yet and the store still thinks it is
+  // local, so the return path used to take the mirror branch above and the board
+  // then waited for the next 15s tick. The watch settles itself — in demo mode
+  // the mirror above is already visible and it stops after one round trip.
+  watchForPaidClaim(stateCode, cityIdValue, orgName);
 
   return {
     stateCode,
