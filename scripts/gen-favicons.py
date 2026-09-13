@@ -53,8 +53,12 @@ def main() -> None:
         append_images=[frames[16], frames[32]],
     )
 
-    # Apple touch icon — full-bleed square (see SVG_APPLE above).
-    render(180, SVG_APPLE).save(ROOT / "src/app/apple-icon.png")
+    # Apple touch icon — full-bleed square (see SVG_APPLE above). Kept in app/
+    # (Next emits the link) AND at the classic root path, which iOS probes on its
+    # own when a page has no apple-touch-icon link.
+    apple = render(180, SVG_APPLE)
+    apple.save(ROOT / "src/app/apple-icon.png")
+    apple.save(ROOT / "public/apple-touch-icon.png")
 
     # Big PNGs for sharing / any external listing.
     for size in (192, 512):
