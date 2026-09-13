@@ -138,7 +138,7 @@ export default function Home() {
 
       {/* sheets (narrow screens) */}
       {sheet && (
-        <div className="pointer-events-auto fixed inset-0 z-40 flex items-end justify-center bg-[rgba(30,45,70,0.4)] xl:hidden">
+        <div className="pointer-events-auto fixed inset-0 z-40 flex items-end justify-center bg-[rgba(30,45,70,0.4)] backdrop-blur-[5px] xl:hidden">
           <div className="h-[86dvh] w-full max-w-md rounded-t-[22px] bg-white p-3 shadow-2xl">
             {sheet === "order" ? (
               <WorldOrder

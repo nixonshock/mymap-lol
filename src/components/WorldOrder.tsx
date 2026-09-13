@@ -412,7 +412,7 @@ export default function WorldOrder({ selection, onSelect, onClaim, onBack, onClo
           info / board / search modals). Backdrop or Escape collapses it. */}
       {expanded && (
         <div
-          className="pointer-events-auto fixed inset-0 z-50 flex items-end justify-center bg-[rgba(30,45,70,0.4)] p-0 sm:items-center sm:p-4"
+          className="pointer-events-auto fixed inset-0 z-50 flex items-end justify-center bg-[rgba(30,45,70,0.4)] backdrop-blur-[5px] p-0 sm:items-center sm:p-4"
           onClick={() => setExpanded(false)}
         >
           <div
