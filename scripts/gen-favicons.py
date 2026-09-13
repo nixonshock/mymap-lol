@@ -28,9 +28,14 @@ SVG = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32"
 </svg>
 """
 
+# iOS masks the home-screen icon into its own squircle and composites any
+# transparency onto BLACK — so the apple-touch-icon ships full-bleed and square,
+# with no rounded corners of ours to double up. Browsers keep the rounded tile.
+SVG_APPLE = SVG.replace(f'rx="7.5" ry="7.5" ', "")
 
-def render(size: int) -> Image.Image:
-    png = cairosvg.svg2png(bytestring=SVG.encode(), output_width=size, output_height=size)
+
+def render(size: int, svg: str = SVG) -> Image.Image:
+    png = cairosvg.svg2png(bytestring=svg.encode(), output_width=size, output_height=size)
     return Image.open(io.BytesIO(png)).convert("RGBA")
 
 
@@ -48,8 +53,8 @@ def main() -> None:
         append_images=[frames[16], frames[32]],
     )
 
-    # Apple touch icon (iOS Add to Home Screen).
-    render(180).save(ROOT / "src/app/apple-icon.png")
+    # Apple touch icon — full-bleed square (see SVG_APPLE above).
+    render(180, SVG_APPLE).save(ROOT / "src/app/apple-icon.png")
 
     # Big PNGs for sharing / any external listing.
     for size in (192, 512):

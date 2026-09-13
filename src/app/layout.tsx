@@ -17,6 +17,11 @@ export const metadata: Metadata = {
     description:
       "A public map where organizations stake Malaysia's states. Your rank is your total stake.",
   },
+  // iPhone "Add to Home Screen": the icon comes from app/apple-icon.png, and
+  // this names the bookmark — without it iOS labels it with the whole <title>.
+  appleWebApp: {
+    title: "mymap.lol",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
