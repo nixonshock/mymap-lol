@@ -103,8 +103,9 @@ export default function Home() {
           </div>
         </div>
 
-        {/* narrow screens: panel sheets */}
-        <div className="absolute bottom-4 left-1/2 flex max-w-[calc(100%-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-2 xl:hidden">
+        {/* narrow screens: panel sheets — pointer-events-auto, or the taps land
+            on the map behind them (the wrapper above is pointer-events-none) */}
+        <div className="pointer-events-auto absolute bottom-4 left-1/2 flex max-w-[calc(100%-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-2 xl:hidden">
           <button
             type="button"
             onClick={() => setSheet("order")}
