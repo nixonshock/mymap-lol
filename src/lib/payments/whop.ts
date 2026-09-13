@@ -81,6 +81,23 @@ export interface WhopCheckout {
   checkoutConfigId: string;
 }
 
+/**
+ * Whop caps a plan title at **30 characters** and rejects the whole request
+ * otherwise ("Validation failed: Title is too long"). A bare state name fits,
+ * which is why state stakes worked and every city stake failed:
+ * "Selangor — USD 10 placement" (26) vs "Sekinchan · Selangor — USD 10
+ * placement" (38). Keep the amount on the end and trim the label to fit.
+ */
+const WHOP_TITLE_MAX = 30;
+
+export function whopPlanTitle(targetLabel: string, currency: string, amount: number): string {
+  const tail = ` · ${currency} ${amount}`;
+  const room = Math.max(1, WHOP_TITLE_MAX - tail.length);
+  const label =
+    targetLabel.length > room ? `${targetLabel.slice(0, room - 1).trimEnd()}…` : targetLabel;
+  return `${label}${tail}`;
+}
+
 /** Create a one-time plan for this exact stake and return its hosted checkout. */
 export async function createWhopCheckout(input: WhopCheckoutInput): Promise<WhopCheckout> {
   const res = await fetch(`${whopApiBase()}/plans`, {

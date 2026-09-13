@@ -6,6 +6,7 @@ import {
   whopChargeAmount,
   whopConfigured,
   whopCurrency,
+  whopPlanTitle,
   whopReturnUrl,
 } from "@/lib/payments/whop";
 import { PRICING, STATES, stateCodeToName } from "@/lib/states";
@@ -255,7 +256,7 @@ export async function POST(req: NextRequest) {
     try {
       const checkout = await createWhopCheckout({
         amountMajor: chargeMajor,
-        title: `${targetLabel} — ${currency} ${chargeMajor} placement`,
+        title: whopPlanTitle(targetLabel, currency, chargeMajor),
         description: whopDescription({ orgName, link, targetLabel }),
         returnUrl: back.toString(),
         metadata: {
@@ -290,15 +291,7 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       if (sb) await sb.from("claims").delete().eq("id", claimId);
       console.error("[api/stake] whop checkout failed:", err);
-      return json(
-        {
-          ok: false,
-          message: "Could not open the checkout — try again.",
-          // TEMPORARY DIAGNOSTIC — reverted in the next commit.
-          detail: String(err instanceof Error ? err.message : err).slice(0, 300),
-        },
-        502,
-      );
+      return json({ ok: false, message: "Could not open the checkout — try again." }, 502);
     }
   }
 
