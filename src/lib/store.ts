@@ -306,11 +306,11 @@ export function addCity(name: string, stateCode: string): City | null {
 }
 
 // ---------------------------------------------------------------- server sync
-async function refreshBoard(): Promise<void> {
+async function refreshBoard(bust = false): Promise<void> {
   if (inFlight) return;
   inFlight = true;
   try {
-    const live = await fetchBoard();
+    const live = await fetchBoard(bust);
     if (live) {
       snapshot = live;
       pollMs = 15_000;
@@ -342,6 +342,44 @@ export function startBoardSync() {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") void refreshBoard();
   });
+}
+
+/**
+ * How long a buyer's page keeps fast-polling for the claim they just paid for.
+ * The Whop webhook flips the row to `paid` a moment after the redirect, so this
+ * has to outlast the webhook's worst case rather than give up early.
+ */
+const CLAIM_WATCH_MS = 90_000;
+const CLAIM_WATCH_EVERY_MS = 2_500;
+let watchTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Is the claim we just paid for on the board yet? */
+function paidClaimVisible(stateCode: string, cityId: string | undefined, orgName: string): boolean {
+  const holders = cityId
+    ? (snapshot.cities.find((c) => c.id === cityId)?.holders ?? [])
+    : (snapshot.states.find((s) => s.code === stateCode)?.holders ?? []);
+  return holders.some((h) => sameOrg(h.orgName, orgName));
+}
+
+/**
+ * A buyer coming back from checkout gets the fireworks — and expects to watch
+ * their state colour in. The row only becomes visible once the webhook lands, so
+ * poll hard (and past the edge cache) until it does, then fall back to the
+ * normal cadence. Without this the map sat stale until the next 15s tick.
+ */
+function watchForPaidClaim(stateCode: string, cityId: string | undefined, orgName: string) {
+  if (typeof window === "undefined") return;
+  if (watchTimer) clearTimeout(watchTimer);
+  const until = Date.now() + CLAIM_WATCH_MS;
+  const tick = async () => {
+    await refreshBoard(true);
+    if (paidClaimVisible(stateCode, cityId, orgName) || Date.now() > until) {
+      watchTimer = null;
+      return;
+    }
+    watchTimer = setTimeout(tick, CLAIM_WATCH_EVERY_MS);
+  };
+  void tick();
 }
 
 // ---------------------------------------------------------------- queries
@@ -722,6 +760,10 @@ export function consumePaidReturn(): PaidReturn | null {
       snapshot = buildLocalSnapshot(localClaims);
       emit();
     }
+  } else {
+    // Live board: the claim is a real row, marked paid by the webhook a moment
+    // from now — watch for it so the map colours in while the buyer is looking.
+    watchForPaidClaim(stateCode, cityIdValue, orgName);
   }
 
   return {

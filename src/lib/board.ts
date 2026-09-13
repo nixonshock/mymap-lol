@@ -82,10 +82,16 @@ export function emptySnapshot(mode: "live" | "local" = "local"): BoardSnapshot {
   };
 }
 
-/** GET the shared board. Returns null when the backend isn't configured (demo). */
-export async function fetchBoard(): Promise<BoardSnapshot | null> {
+/**
+ * GET the shared board. Returns null when the backend isn't configured (demo).
+ *
+ * `bust` appends a throwaway query param: the route is edge-cached for a few
+ * seconds (stale-while-revalidate longer), and a buyer who just paid must not be
+ * handed a snapshot taken before their claim existed.
+ */
+export async function fetchBoard(bust = false): Promise<BoardSnapshot | null> {
   try {
-    const res = await fetch("/api/board", { cache: "no-store" });
+    const res = await fetch(bust ? `/api/board?t=${Date.now()}` : "/api/board", { cache: "no-store" });
     if (!res.ok) return null;
     const data = (await res.json()) as BoardSnapshot & { mode?: string };
     if (!data || data.mode !== "live") return null;
