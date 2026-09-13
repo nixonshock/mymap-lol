@@ -290,7 +290,15 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       if (sb) await sb.from("claims").delete().eq("id", claimId);
       console.error("[api/stake] whop checkout failed:", err);
-      return json({ ok: false, message: "Could not open the checkout — try again." }, 502);
+      return json(
+        {
+          ok: false,
+          message: "Could not open the checkout — try again.",
+          // TEMPORARY DIAGNOSTIC — reverted in the next commit.
+          detail: String(err instanceof Error ? err.message : err).slice(0, 300),
+        },
+        502,
+      );
     }
   }
 
