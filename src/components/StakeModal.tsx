@@ -81,8 +81,12 @@ export default function StakeModal({
    */
   const claimName = mine?.orgName || displayName;
 
-  /** A payment is never smaller than the floor, so neither is the form. */
-  const belowMin = amount > 0 && amount < PRICING.minClaim;
+  /**
+   * A payment is never smaller than the floor, so neither is the form. A typed
+   * 0 counts as below the floor now that the floor is $1 — only the untouched
+   * field (which follows the suggestion) is exempt.
+   */
+  const belowMin = !amountFollows && amount < PRICING.minClaim;
   /** What the CTA would actually charge — never below the floor. */
   const chargeAmount = Math.max(amount || suggested, PRICING.minClaim);
 
@@ -293,7 +297,7 @@ export default function StakeModal({
                 </span>
               )}
               {/* Edited away from the suggestion? One tap puts back the exact
-                  amount that takes #1 (or the $10 floor when already #1). */}
+                  amount that takes #1 (or the floor when already #1). */}
               {!amountFollows && amount !== suggested && (
                 <button
                   type="button"

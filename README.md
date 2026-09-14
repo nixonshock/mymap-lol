@@ -33,7 +33,8 @@ leaderboard + stake form. City pins on the map turn dark once a city is held.
 Every payment is **revenue** — it's an ad buy, not a bet. There is no payout, no
 bet, no "loser". You keep what you charge:
 
-- `minClaim` — the floor to claim an open state (default **$10**).
+- `minClaim` — the floor to claim an open state (currently **$1 ≈ RM4**: an easy
+  first step for a new visitor, who can then top up and climb).
 - Stake/top-up amounts — the amount an org pays to hold or take the top spot.
 - Add a `fee` (in `src/lib/states.ts`) if you want a **platform cut** on top.
 
@@ -76,7 +77,7 @@ WHOP_SUPPORT_EMAIL=      # optional: shown on the checkout ("contact … first")
 ```
 
 **Currency:** the site quotes dollars and shows the ringgit equivalent next to
-every price (`$10 ≈ RM40`, `NEXT_PUBLIC_USD_MYR`). The plan is created in **USD**,
+every price (`$1 ≈ RM4`, `NEXT_PUBLIC_USD_MYR`). The plan is created in **USD**,
 so the buyer's card is charged US dollars — the RM figure is a conversion shown
 for local shoppers, not a charge. (Worldmap.lol does the same: "payments are
 whole US dollars".) Setting `WHOP_CURRENCY=myr` instead charges ringgit at

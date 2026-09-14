@@ -25,8 +25,9 @@ export const stateCodeToName = (code: string) =>
 
 // Pricing (stake units = US dollars). Tune this to your revenue model.
 export const PRICING = {
-  /** minimum to claim an empty state */
-  minClaim: 10,
+  /** minimum to claim an empty state (Jerry, Sep 2026: a $1 start so it is easy
+   *  to get on the board and build from there) */
+  minClaim: 1,
   /** $ amount must exceed the incumbent #1 by at least this to take the top spot */
   minToOvertake: 1,
   /** fixed platform fee kept on every payment (revenue). 0 = keep 100% of stake. */
@@ -50,5 +51,5 @@ export const USD_MYR = (() => {
 export const moneyMyr = (usd: number) =>
   `RM${(usd * USD_MYR).toLocaleString("en-MY", { maximumFractionDigits: 0 })}`;
 
-/** "$10 ≈ RM40" — the standard price label. */
+/** "$1 ≈ RM4" / "$10 ≈ RM40" — the standard price label, whatever the floor is. */
 export const moneyBoth = (usd: number) => `${money(usd)} ≈ ${moneyMyr(usd)}`;

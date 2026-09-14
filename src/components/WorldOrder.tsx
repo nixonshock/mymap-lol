@@ -69,7 +69,7 @@ export default function WorldOrder({ selection, onSelect, onClaim, onBack, onClo
   );
   /** for a city: which state it sits in, so the header can say so */
   const cityParent = selection?.kind === "city" ? cityById(selection.code)?.state : undefined;
-  /** what it costs this visitor to take #1 here (the $10 floor when empty) */
+  /** what it costs this visitor to take #1 here (the floor when empty) */
   const claimAmount = useMemo(() => (board ? minimumToOvertake(board, "") : PRICING.minClaim), [board]);
 
   // Escape collapses the expanded board.
