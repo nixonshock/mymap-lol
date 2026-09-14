@@ -50,7 +50,15 @@ export default function Home() {
   }, []);
 
   const pickState = useCallback((code: string) => showBids({ kind: "state", code }), [showBids]);
-  const selectCity = useCallback((id: string) => showBids({ kind: "city", code: id }), [showBids]);
+  /**
+   * A city opens its board as a **dialog**, on every screen size — the rail
+   * panel swapping silently was too quiet (Jerry, Sep 2026: "clicking on city
+   * shall open a dialog"). States still just retarget the rail board.
+   */
+  const selectCity = useCallback((id: string) => {
+    setSelection({ kind: "city", code: id });
+    setSheet("order");
+  }, []);
 
   /** The board's CTA: this is the only way into the bidding window from there. */
   const openStake = useCallback((sel: { kind: "state" | "city"; code: string }) => {
@@ -63,6 +71,16 @@ export default function Home() {
     }
     setTarget({ kind: "state", code: sel.code });
   }, []);
+
+  // Escape closes the dialog (it is a real dialog at every screen size now).
+  useEffect(() => {
+    if (!sheet) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSheet(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sheet]);
 
   return (
     <div className="map-stage">
@@ -138,10 +156,20 @@ export default function Home() {
         </div>
       </div>
 
-      {/* sheets (narrow screens) */}
+      {/* boards + cities as a dialog: bottom sheet on phones, centred card from
+          sm up (the same shell the info / board / search modals use). A city
+          click opens this on every screen size; Escape or the backdrop closes. */}
       {sheet && (
-        <div className="pointer-events-auto fixed inset-0 z-40 flex items-end justify-center bg-[rgba(30,45,70,0.4)] backdrop-blur-[5px] xl:hidden">
-          <div className="h-[86dvh] w-full max-w-md rounded-t-[22px] bg-white p-3 shadow-2xl">
+        <div
+          className="pointer-events-auto fixed inset-0 z-50 flex items-end justify-center bg-[rgba(30,45,70,0.4)] p-0 backdrop-blur-[5px] sm:items-center sm:p-4"
+          onClick={() => setSheet(null)}
+        >
+          <div
+            className={`flex w-full max-w-md flex-col overflow-hidden rounded-t-[26px] bg-white shadow-2xl sm:rounded-[26px] ${
+              sheet === "order" ? "h-[86dvh] sm:h-auto sm:max-h-[92dvh]" : "h-[86dvh] sm:max-h-[92dvh]"
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
             {sheet === "order" ? (
               <WorldOrder
                 selection={selection}

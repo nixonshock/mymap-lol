@@ -316,15 +316,20 @@ export default function WorldOrder({ selection, onSelect, onClaim, onBack, onClo
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            aria-label={expanded ? "Collapse" : "Expand"}
-            aria-expanded={expanded}
-            onClick={() => setExpanded((v) => !v)}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f2f7fc] text-[14px] font-bold text-[#3a4a5e] ring-1 ring-[#e5edf5] transition hover:bg-[#e6eef7]"
-          >
-            {expanded ? "⤡" : "⤢"}
-          </button>
+          {/* No ⤢ while the panel is already a dialog (the city dialog / the
+              narrow-screen sheet pass onClose) — expanding it again would just
+              stack an identical card on top. */}
+          {!onClose && (
+            <button
+              type="button"
+              aria-label={expanded ? "Collapse" : "Expand"}
+              aria-expanded={expanded}
+              onClick={() => setExpanded((v) => !v)}
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f2f7fc] text-[14px] font-bold text-[#3a4a5e] ring-1 ring-[#e5edf5] transition hover:bg-[#e6eef7]"
+            >
+              {expanded ? "⤡" : "⤢"}
+            </button>
+          )}
           {onClose && !expanded && (
             <button
               type="button"
