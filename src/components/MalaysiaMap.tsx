@@ -32,8 +32,10 @@ interface Tf {
 const MIN_K = 1;
 const MAX_K = 12;
 const ZOOM_STEP = 1.35;
-/** width of the city owner preview card (it is placed beside the pin) */
-const CITY_CARD_W = 300;
+/** width of the owner preview card the map shows (state and city hovers) */
+const OWNER_CARD_W = 300;
+/** rough card height, used only to keep it inside the viewport */
+const OWNER_CARD_H = 300;
 
 /**
  * The href of the nearest ancestor element carrying data-href (the owner label
@@ -59,6 +61,16 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
     rect: { x: number; y: number; right: number; top: number };
   } | null>(null);
   const cityLeaveTimer = useRef<number | null>(null);
+  /**
+   * A hovered claimed state: which state, and where the pointer was when the
+   * hover started (the owner card is placed from that point, so it stays put
+   * while the pointer roams inside the state).
+   */
+  const [ownerHover, setOwnerHover] = useState<{
+    code: string;
+    rect: { x: number; y: number; right: number; top: number };
+  } | null>(null);
+  const ownerLeaveTimer = useRef<number | null>(null);
   const [mouse, setMouse] = useState<{ x: number; y: number } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [tf, setTf] = useState<Tf>({ k: 1, x: 0, y: 0 });
@@ -164,6 +176,20 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
     updateTf({ k: 1, x: 0, y: 0 });
   }
 
+  /**
+   * The owner card survives the pointer travelling from the state onto the card
+   * itself (so its "View profile" link is reachable); it closes a moment after
+   * the pointer leaves both.
+   */
+  function keepOwnerCard() {
+    if (ownerLeaveTimer.current) window.clearTimeout(ownerLeaveTimer.current);
+  }
+
+  function scheduleOwnerHide() {
+    if (ownerLeaveTimer.current) window.clearTimeout(ownerLeaveTimer.current);
+    ownerLeaveTimer.current = window.setTimeout(() => setOwnerHover(null), 140);
+  }
+
   function onPointerDown(e: React.PointerEvent<SVGSVGElement>) {
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
@@ -183,6 +209,8 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
       movedRef.current = false;
       setDragging(true);
       setHovered(null);
+      keepOwnerCard();
+      setOwnerHover(null);
     } else if (pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()];
       const dist0 = Math.hypot(a.x - b.x, a.y - b.y);
@@ -335,8 +363,32 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
                 stroke={isSel ? "#1f2b3e" : isHover ? "#7aa0c8" : "#a8b8c8"}
                 strokeWidth={isSel ? 1.8 : isHover ? 1.3 : 1}
                 className="cursor-pointer transition-[fill] duration-150"
-                onMouseEnter={() => setHovered(code)}
-                onMouseLeave={() => setHovered((c) => (c === code ? null : c))}
+                onMouseEnter={(e) => {
+                  setHovered(code);
+                  if (total <= 0) {
+                    // nothing to preview — the compact tip says "open for claiming"
+                    keepOwnerCard();
+                    setOwnerHover(null);
+                    return;
+                  }
+                  // A claimed state previews its #1 holder in the same card the
+                  // lists use, placed from where the pointer entered.
+                  keepOwnerCard();
+                  setCityHover(null);
+                  setOwnerHover({
+                    code,
+                    rect: {
+                      x: e.clientX,
+                      y: e.clientY,
+                      right: e.clientX,
+                      top: e.clientY,
+                    },
+                  });
+                }}
+                onMouseLeave={() => {
+                  setHovered((c) => (c === code ? null : c));
+                  scheduleOwnerHide();
+                }}
               />
             );
           })}
@@ -438,6 +490,9 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
                   className="cursor-pointer"
                   onPointerOver={(e) => {
                     if (cityLeaveTimer.current) window.clearTimeout(cityLeaveTimer.current);
+                    // a pin sits inside its state: drop the state's own card
+                    keepOwnerCard();
+                    setOwnerHover(null);
                     if (!held) return;
                     const b = e.currentTarget.getBoundingClientRect();
                     setCityHover({
@@ -500,8 +555,10 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
         </button>
       </div>
 
-      {/* tooltip */}
-      {hovered && mouse && !dragging && (
+      {/* tooltip — the compact text tip is for states with no holder to preview
+          (white, open-for-claiming ones). A claimed state opens the owner card
+          below instead, the same one the lists show. */}
+      {hovered && mouse && !dragging && (totals[hovered]?.total ?? 0) <= 0 && (
         <HoverTip
           x={mouse.x}
           y={mouse.y}
@@ -513,6 +570,48 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
         />
       )}
 
+      {/* state owner preview — hovering a claimed state shows the #1 holder in
+          the same card the lists use (og image included). Fixed, so a pan or
+          zoom can't drag it along; hovering the card keeps it open so its
+          "View profile" link stays reachable. */}
+      {ownerHover &&
+        (() => {
+          const holder = topHolder(ownerHover.code);
+          if (!holder || (totals[ownerHover.code]?.total ?? 0) <= 0) return null;
+          const cityStakes = citiesInState(ownerHover.code);
+          const left =
+            ownerHover.rect.right + 12 + OWNER_CARD_W <= window.innerWidth
+              ? ownerHover.rect.right + 12
+              : Math.max(8, ownerHover.rect.x - OWNER_CARD_W - 12);
+          const top = Math.min(
+            Math.max(ownerHover.rect.top - 10, 8),
+            Math.max(8, window.innerHeight - OWNER_CARD_H - 8),
+          );
+          return (
+            <div
+              style={{ left, top, width: OWNER_CARD_W }}
+              onMouseEnter={keepOwnerCard}
+              onMouseLeave={scheduleOwnerHide}
+              className="fixed z-[60] overflow-hidden rounded-2xl bg-white text-left shadow-[0_18px_50px_-10px_rgba(31,43,62,0.45)] ring-1 ring-[#dfe7f0]"
+            >
+              <OwnerCardContent
+                data={{
+                  orgName: holder.orgName,
+                  pitch: holder.pitch,
+                  link: holder.link,
+                  total: holder.total,
+                  claims: holder.claims,
+                  where: stateCodeToName(ownerHover.code),
+                  rank: 1,
+                  note: cityStakes.length
+                    ? `🏙️ ${cityStakes.map((c) => c.name).join(", ")} staked`
+                    : undefined,
+                }}
+              />
+            </div>
+          );
+        })()}
+
       {/* city preview — hovering a held city pin shows its owner (the same card
           the lists use). Fixed, so a pan or zoom can't drag it along. */}
       {cityHover &&
@@ -520,16 +619,16 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
           const holder = topHolderForCity(cityHover.id);
           if (!holder) return null;
           const left =
-            cityHover.rect.right + 12 + CITY_CARD_W <= window.innerWidth
+            cityHover.rect.right + 12 + OWNER_CARD_W <= window.innerWidth
               ? cityHover.rect.right + 12
-              : Math.max(8, cityHover.rect.x - CITY_CARD_W - 12);
+              : Math.max(8, cityHover.rect.x - OWNER_CARD_W - 12);
           const top = Math.min(
             Math.max(cityHover.rect.top - 10, 8),
-            Math.max(8, window.innerHeight - 300),
+            Math.max(8, window.innerHeight - OWNER_CARD_H - 8),
           );
           return (
             <div
-              style={{ left, top, width: CITY_CARD_W }}
+              style={{ left, top, width: OWNER_CARD_W }}
               onMouseEnter={() => {
                 if (cityLeaveTimer.current) window.clearTimeout(cityLeaveTimer.current);
               }}

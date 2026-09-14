@@ -32,6 +32,8 @@ export interface OwnerPreviewData {
   rank?: number;
   /** overrides the staked line (used by the live-activity rows) */
   stat?: string;
+  /** one extra line above the footer (the map uses it for a state's cities) */
+  note?: string;
 }
 
 const CARD_W = 300;
@@ -100,6 +102,10 @@ export function OwnerCardContent({ data }: { data: OwnerPreviewData }) {
             <span aria-hidden>🔗</span>
             <span className="truncate">{host}</span>
           </a>
+        )}
+
+        {data.note && (
+          <p className="mt-1.5 text-[11px] font-bold text-[#3a4a5e]">{data.note}</p>
         )}
 
         <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-[#eef3f9] pt-2.5">
