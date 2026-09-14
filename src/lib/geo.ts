@@ -11,10 +11,18 @@ export interface FeatureLayout {
 
 export interface MapGeom {
   projection: GeoProjection;
+  /**
+   * Project a point the same way the map draws it — fitted projection **plus**
+   * the East Malaysian offset (see `GAP_CLOSED`). City pins go through this so
+   * they land on the drawn land, not on the empty sea where Borneo used to be.
+   */
+  project: (point: [number, number], stateCode?: string) => [number, number] | null;
   /** Build an SVG path `d` string for one feature from the fitted projection. */
   path: (feature: MapFeature) => string;
   viewBox: string; // "minX minY width height"
   layout: FeatureLayout[];
+  /** the sea still left between the two Malaysias, in viewBox units */
+  seaGap: number;
 }
 
 export interface MapFeature {
@@ -24,6 +32,23 @@ export interface MapFeature {
 }
 
 type AnyGeom = { type?: string; coordinates?: unknown };
+
+/**
+ * The two Malaysias. Everything on Borneo (plus Labuan) sits across the South
+ * China Sea from the peninsula, which on a true projection leaves a gap as wide
+ * as a third of the country — and since the map is fit to the frame's width, that
+ * sea is what makes the land look small.
+ */
+const EAST_CODES = new Set(["MY-12", "MY-13", "MY-15"]); // Sabah, Sarawak, Labuan
+
+/**
+ * How much of that sea to close up (Jerry, Sep 2026: "reduce the gap in between
+ * 2 malaysia region … so that we have less of sea while more of lands"). 0 =
+ * true geography, 1 = the two landmasses touch. 0.6 takes the gap to 40% of its
+ * real width: the country stays honestly two-part, but the fit scale rises ~25%
+ * and the land fills the frame instead of the ocean.
+ */
+const GAP_CLOSED = 0.6;
 
 /**
  * Walk a GeoJSON geometry and call `cb` once per ring (Polygon/MultiPolygon),
@@ -75,36 +100,57 @@ export function buildMapGeom(geojson: FeatureCollection, width = 1000, height = 
   const projection = geoMercator();
 
   // Pass 1: project every vertex at scale=1, translate=0 to get true relative
-  // coordinates.
+  // coordinates — tracking the x extent of each side of the South China Sea so
+  // the sea can be closed up before the fit is computed.
   projection.scale(1).translate([0, 0]);
-  let minX = Infinity;
   let minY = Infinity;
-  let maxX = -Infinity;
   let maxY = -Infinity;
+  let westMinX = Infinity;
+  let westMaxX = -Infinity;
+  let eastMinX = Infinity;
+  let eastMaxX = -Infinity;
 
   const featureGeoms: AnyGeom[] = [];
   for (const f of geojson.features) {
     const g = (f.geometry ?? undefined) as AnyGeom | undefined;
     featureGeoms.push(g as AnyGeom);
+    const east = EAST_CODES.has(f.properties?.code ?? "");
     eachRing(g, (ring) => {
       for (const p of ring) {
         const pr = projection(p as [number, number]);
         if (!pr || !Number.isFinite(pr[0]) || !Number.isFinite(pr[1])) continue;
-        if (pr[0] < minX) minX = pr[0];
         if (pr[1] < minY) minY = pr[1];
-        if (pr[0] > maxX) maxX = pr[0];
         if (pr[1] > maxY) maxY = pr[1];
+        if (east) {
+          if (pr[0] < eastMinX) eastMinX = pr[0];
+          if (pr[0] > eastMaxX) eastMaxX = pr[0];
+        } else {
+          if (pr[0] < westMinX) westMinX = pr[0];
+          if (pr[0] > westMaxX) westMaxX = pr[0];
+        }
       }
     });
   }
+
+  const hasBothSides =
+    Number.isFinite(westMaxX) && Number.isFinite(eastMinX) && eastMinX > westMaxX;
+  /** raw-units slide applied to everything on Borneo (0 for a single state) */
+  const shiftRaw = hasBothSides ? -(eastMinX - westMaxX) * GAP_CLOSED : 0;
+  // A single state's own silhouette has only one side present, so the absent one
+  // is ±Infinity and the Math.min/Math.max pair simply ignores it (the slide is 0
+  // there too — a lone state must never move).
+  const minX = Math.min(westMinX, eastMinX + shiftRaw);
+  const maxX = Math.max(westMaxX, eastMaxX + shiftRaw);
 
   if (!Number.isFinite(minX) || !Number.isFinite(maxX)) {
     // No usable coordinates — fall back to a plain world viewBox.
     return {
       projection,
+      project: () => null,
       path: () => "",
       viewBox: "0 0 1000 640",
       layout: [],
+      seaGap: 0,
     };
   }
 
@@ -116,15 +162,33 @@ export function buildMapGeom(geojson: FeatureCollection, width = 1000, height = 
     .scale(k)
     .translate([width / 2 - k * ((minX + maxX) / 2), height / 2 - k * ((minY + maxY) / 2)]);
 
+  /** the same slide, now in fitted units — applied to every Borneo coordinate */
+  const shift = k * shiftRaw;
+  const shiftFor = (stateCode?: string) =>
+    shift !== 0 && EAST_CODES.has(stateCode ?? "") ? shift : 0;
+  const seaGap = hasBothSides ? (eastMinX - westMaxX) * k : 0;
+
+  /**
+   * Project a point the way the map draws it: fitted projection, then the Borneo
+   * slide. City pins need this — a pin projected without the slide lands in open
+   * sea to the east of the drawn island.
+   */
+  const project = (point: [number, number], stateCode?: string): [number, number] | null => {
+    const pr = projection(point);
+    if (!pr || !Number.isFinite(pr[0]) || !Number.isFinite(pr[1])) return null;
+    return [pr[0] + shiftFor(stateCode), pr[1]];
+  };
+
   // Pass 2: with the fitted projection, build path strings + label layout.
   const path = (feature: MapFeature): string => {
+    const shiftX = shiftFor(feature?.properties?.code);
     const parts: string[] = [];
     eachRing(feature?.geometry as AnyGeom | undefined, (ring) => {
       let started = false;
       for (const p of ring) {
         const pr = projection(p as [number, number]);
         if (!pr || !Number.isFinite(pr[0]) || !Number.isFinite(pr[1])) continue;
-        parts.push(`${started ? "L" : "M"}${pr[0].toFixed(2)},${pr[1].toFixed(2)}`);
+        parts.push(`${started ? "L" : "M"}${(pr[0] + shiftX).toFixed(2)},${pr[1].toFixed(2)}`);
         started = true;
       }
       if (started) parts.push("Z");
@@ -140,6 +204,7 @@ export function buildMapGeom(geojson: FeatureCollection, width = 1000, height = 
 
   for (const feat of geojson.features) {
     const g = (feat.geometry ?? undefined) as AnyGeom | undefined;
+    const shiftX = shiftFor(feat.properties?.code);
     let x0 = Infinity;
     let y0 = Infinity;
     let x1 = -Infinity;
@@ -154,12 +219,13 @@ export function buildMapGeom(geojson: FeatureCollection, width = 1000, height = 
       for (const p of ring) {
         const pr = projection(p as [number, number]);
         if (!pr || !Number.isFinite(pr[0]) || !Number.isFinite(pr[1])) continue;
-        proj.push([pr[0], pr[1]]);
-        if (pr[0] < x0) x0 = pr[0];
+        const x = pr[0] + shiftX;
+        proj.push([x, pr[1]]);
+        if (x < x0) x0 = x;
         if (pr[1] < y0) y0 = pr[1];
-        if (pr[0] > x1) x1 = pr[0];
+        if (x > x1) x1 = x;
         if (pr[1] > y1) y1 = pr[1];
-        sx += pr[0];
+        sx += x;
         sy += pr[1];
         n++;
       }
@@ -182,7 +248,7 @@ export function buildMapGeom(geojson: FeatureCollection, width = 1000, height = 
   }
 
   const viewBox = `${(fx0 - pad).toFixed(2)} ${(fy0 - pad).toFixed(2)} ${(fx1 - fx0 + pad * 2).toFixed(2)} ${(fy1 - fy0 + pad * 2).toFixed(2)}`;
-  return { projection, path, viewBox, layout };
+  return { projection, project, path, viewBox, layout, seaGap };
 }
 
 /**

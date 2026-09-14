@@ -126,7 +126,7 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
     if (!geom) return [];
     const out: { x: number; y: number; id: string; name: string; state: string; major?: boolean }[] = [];
     for (const c of CITIES) {
-      const p = geom.projection([c.lng as number, c.lat as number]);
+      const p = geom.project([c.lng as number, c.lat as number], c.state);
       if (p && Number.isFinite(p[0]) && Number.isFinite(p[1])) {
         out.push({ x: p[0], y: p[1], id: c.id, name: c.name, state: c.state, major: c.major });
       }
