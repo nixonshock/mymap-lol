@@ -93,6 +93,17 @@ export function StateShape({
 /** Deep navy behind an unheld state on the profile card (worldmap's globe look). */
 const OPEN_FILL = "#16293c";
 
+/**
+ * Outline of a state this listing does *not* hold. It used to be
+ * `rgba(255,255,255,0.13)` — on the navy card that is a 30-unit luminance step
+ * over the fill, so the country's shape all but vanished and Jerry asked for it
+ * back ("i want the map outline to be visible / more obvious — perhaps a grey or
+ * color close to white"). A near-white at half strength keeps the held state's
+ * gold the loudest thing on the card while the geography stays legible.
+ */
+const OPEN_STROKE = "rgba(255,255,255,0.52)";
+const OPEN_STROKE_W = 1.1;
+
 export function PinMap({ held }: { held: string[] }) {
   const geojson = useMalaysiaGeojson();
   const version = useSyncExternalStore(subscribe, getVersion, getVersion);
@@ -121,8 +132,8 @@ export function PinMap({ held }: { held: string[] }) {
             key={code || i}
             d={geom.path(f as MapFeature)}
             fill={total > 0 ? stateFill(code, total, max) : OPEN_FILL}
-            stroke={mine ? "#ffc93c" : "rgba(255,255,255,0.13)"}
-            strokeWidth={mine ? 1.8 : 0.8}
+            stroke={mine ? "#ffc93c" : OPEN_STROKE}
+            strokeWidth={mine ? 1.8 : OPEN_STROKE_W}
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
           />
