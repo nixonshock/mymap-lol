@@ -7,6 +7,7 @@ import { useSyncExternalStore } from "react";
 import { subscribe, getVersion, allTotals, citiesInState, cityTotals, stateLeaderboard, topHolder, topHolderForCity } from "@/lib/store";
 import { PRICING, money, moneyBoth, stateCodeToName } from "@/lib/states";
 import { linkLabel, safeHref } from "@/lib/links";
+import { trackClick } from "@/lib/track";
 import { CITIES } from "@/lib/cities";
 import { OwnerCardContent } from "@/components/OwnerPreview";
 
@@ -285,6 +286,9 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
     }
 
     if (wasTap && isSingle && href) {
+      // count it before the tab opens — the map label is the listing's biggest
+      // click surface (see /api/click)
+      trackClick({ link: href, source: "map" });
       window.open(href, "_blank", "noopener,noreferrer");
       return;
     }

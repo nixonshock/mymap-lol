@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState, type ElementType, type Pointe
 import { Favicon, useLinkPreview } from "@/components/LinkPreview";
 import { linkLabel, outboundHref, pinHref } from "@/lib/links";
 import { money } from "@/lib/states";
+import { trackClick } from "@/lib/track";
 
 /**
  * The owner behind a name, as a floating preview card.
@@ -97,6 +98,7 @@ export function OwnerCardContent({ data }: { data: OwnerPreviewData }) {
             href={href ?? undefined}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => trackClick({ link: data.link, orgName: data.orgName, source: "card" })}
             className="mt-2 flex items-center gap-1.5 text-[11.5px] font-bold text-[#166d4a] transition hover:text-[#0f5c3c]"
           >
             <span aria-hidden>🔗</span>

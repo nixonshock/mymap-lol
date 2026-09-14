@@ -5,6 +5,7 @@ import Link from "next/link";
 import { STATES, money, stateCodeToName } from "@/lib/states";
 import { subscribe, getVersion, addCity, allCities, cityTotals, topHolderForCity } from "@/lib/store";
 import { linkLabel, pinHref, safeHref } from "@/lib/links";
+import { trackClick } from "@/lib/track";
 import OwnerHover from "@/components/OwnerPreview";
 import type { City } from "@/lib/cities";
 import type { StakeTarget } from "@/lib/types";
@@ -246,7 +247,10 @@ function CityRow({
           href={href}
           target="_blank"
           rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            trackClick({ link: holder?.link, orgName: holder?.orgName, source: "cities" });
+          }}
           aria-label={`Open ${holder?.orgName}'s site`}
           title={href}
           className="shrink-0 rounded-full bg-white px-2 py-1 text-[10.5px] font-extrabold text-[#166d4a] ring-1 ring-[#cfe8d9] transition hover:bg-[#e7f7ef]"

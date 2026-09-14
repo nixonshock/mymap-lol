@@ -15,6 +15,7 @@ import {
 import { stateHue } from "@/lib/geo";
 import { PRICING, STATES, money, moneyBoth } from "@/lib/states";
 import { iconUrl, linkLabel, outboundHref, pinHref } from "@/lib/links";
+import { trackClick } from "@/lib/track";
 import { Favicon, useLinkPreview } from "@/components/LinkPreview";
 import { PinMap, StateShape } from "@/components/PinMap";
 import { rankSize } from "@/lib/rank";
@@ -52,6 +53,14 @@ const accentOf = (t: PinTerritory) => `hsl(${hueOf(t)} 78% 82%)`;
 /** undefined = board not readable yet (server render) · null = nothing staked here */
 type PinProfileValue = PinProfileData | null | undefined;
 
+/** What /api/click reports back for a listing: how often its link is opened. */
+interface Reach {
+  clicks: number;
+  clicks7d: number;
+  visitors: number;
+  mode: string;
+}
+
 const GOLD_PILL =
   "inline-flex items-center gap-1.5 rounded-full bg-[linear-gradient(90deg,#FFF1C9,#FFE39B)] px-3 py-1.5 text-[11px] font-extrabold text-[#5a4a2a] shadow-[inset_0_0_0_1px_rgba(232,172,18,0.35)] md:text-[12px]";
 
@@ -70,6 +79,33 @@ export default function PinProfile({ slug }: { slug: string }) {
   useEffect(() => {
     startBoardSync();
   }, []);
+
+  /**
+   * How many visitors have tapped through to this listing's own site. It comes
+   * from its own endpoint rather than the board snapshot: clicks change every
+   * few seconds and only this page needs them.
+   */
+  const [reach, setReach] = useState<Reach | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/click?slug=${encodeURIComponent(slug)}`)
+      .then((r) => r.json())
+      .then((d: Partial<Reach> & { ok?: boolean }) => {
+        if (!alive || !d?.ok) return;
+        setReach({
+          clicks: Number(d.clicks ?? 0),
+          clicks7d: Number(d.clicks7d ?? 0),
+          visitors: Number(d.visitors ?? 0),
+          mode: String(d.mode ?? "live"),
+        });
+      })
+      .catch(() => {
+        /* the panel simply stays hidden */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [slug]);
 
   const boards = useMemo(
     () =>
@@ -209,6 +245,7 @@ export default function PinProfile({ slug }: { slug: string }) {
                     href={link}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => trackClick({ link: pin.link, orgName: pin.orgName, source: "profile" })}
                     className="font-display inline-flex items-center gap-1.5 rounded-full bg-[#1f2b3e] px-5 py-3 text-[15px] font-semibold text-white shadow-[0_8px_22px_rgba(31,43,62,0.28)] transition hover:-translate-y-0.5"
                   >
                     Visit site <span className="text-[17px] font-black">↗</span>
@@ -231,6 +268,44 @@ export default function PinProfile({ slug }: { slug: string }) {
           </div>
         </section>
       </div>
+
+      {/* Reach: how often the listing's own link actually gets opened. The
+          bidder paid for a spot here, so this is the number that says whether
+          the spot is doing anything for them. Self-explanatory for a visitor
+          too — it is the same link the "Visit site" button opens. */}
+      {link && reach && (
+        <section className="mt-4 rounded-[22px] bg-white p-[18px] shadow-[0_14px_34px_rgba(45,80,130,0.12)] ring-1 ring-[#e5edf5] md:px-[22px]">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <span className="text-[11px] font-extrabold uppercase tracking-[1.54px] text-[#8494ab]">
+              reach · link clicks
+            </span>
+            <span className="min-w-0 truncate text-[11.5px] font-bold text-[#9aa6b6]">{site}</span>
+          </div>
+          <div className="mt-3 flex flex-wrap items-end gap-x-6 gap-y-2">
+            <div className="flex items-baseline gap-2">
+              <b className="font-display text-[30px] font-bold leading-none text-[#1f2b3e]">
+                {reach.clicks}
+              </b>
+              <span className="text-[12.5px] font-bold text-[#8494ab]">
+                {reach.clicks === 1 ? "tap-through" : "tap-throughs"}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1 text-[12.5px] font-bold text-[#8494ab]">
+              <span>
+                <b className="text-[#1f7a55]">{reach.visitors}</b>{" "}
+                {reach.visitors === 1 ? "visitor" : "visitors"}
+              </span>
+              <span>
+                <b className="text-[#1f7a55]">{reach.clicks7d}</b> in the last 7 days
+              </span>
+            </div>
+          </div>
+          <p className="mt-2.5 text-[11px] font-semibold leading-relaxed text-[#9aa6b6]">
+            Counted every time someone opens your site from mymap.lol — the map label, the lists,
+            the hover card and this page. Repeat taps by the same visitor count once as a visitor.
+          </p>
+        </section>
+      )}
 
       {/* every territory it holds, with the live standings under it */}
       <h2 className="font-display mt-[30px] mb-3 text-[19px] font-bold text-[#1f2b3e]">Territories held</h2>
