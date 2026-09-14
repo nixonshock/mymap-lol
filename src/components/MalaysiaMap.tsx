@@ -438,6 +438,26 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
                       title={href ? `${owner.orgName} — ${href}` : owner.orgName}
                       aria-label={href ? `${owner.orgName}: open ${href}` : undefined}
                       className={href ? "cursor-pointer" : undefined}
+                      // The label sits on top of its state, and on a small state
+                      // (Melaka, Penang, Putrajaya) it covers the whole thing —
+                      // so hovering it must preview the owner too, or there is no
+                      // way to see who holds the state at all (Jerry, Sep 2026).
+                      // Placement comes from the label's own box, not the pointer,
+                      // and an already-open card for this state is left where it is.
+                      onMouseEnter={(e) => {
+                        keepOwnerCard();
+                        setHoveredCity(null);
+                        const b = e.currentTarget.getBoundingClientRect();
+                        setOwnerHover((prev) =>
+                          prev && prev.code === l.code
+                            ? prev
+                            : {
+                                code: l.code,
+                                rect: { x: b.x, y: b.y, right: b.right, top: b.top },
+                              },
+                        );
+                      }}
+                      onMouseLeave={scheduleOwnerHide}
                     >
                       <text
                         x={l.centroid[0]}
