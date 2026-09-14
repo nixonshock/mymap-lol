@@ -91,8 +91,9 @@ export default function Home() {
           selectedCode={selection?.kind === "state" ? selection.code : null}
           onSelect={pickState}
           selectedCityId={selection?.kind === "city" ? selection.code : null}
-          // a city pin opens that city's dialog — its bids and the way in, in one step
-          onOpenCity={(id) => openStake({ kind: "city", code: id })}
+          // a city pin behaves exactly like a city row in the panel: it opens
+          // that city's board dialog (Jerry, Sep 2026)
+          onOpenCity={selectCity}
         />
       </div>
 

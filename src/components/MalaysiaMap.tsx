@@ -71,6 +71,13 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
     rect: { x: number; y: number; right: number; top: number };
   } | null>(null);
   const ownerLeaveTimer = useRef<number | null>(null);
+  /**
+   * A hovered, **open** city pin (nothing staked there yet): it gets the same
+   * compact tip an open state gets, since there is no owner to preview.
+   */
+  const [hoveredCity, setHoveredCity] = useState<{ id: string; name: string; state: string } | null>(
+    null,
+  );
   const [mouse, setMouse] = useState<{ x: number; y: number } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [tf, setTf] = useState<Tf>({ k: 1, x: 0, y: 0 });
@@ -116,11 +123,11 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
 
   const projectedCities = useMemo(() => {
     if (!geom) return [];
-    const out: { x: number; y: number; id: string; name: string; major?: boolean }[] = [];
+    const out: { x: number; y: number; id: string; name: string; state: string; major?: boolean }[] = [];
     for (const c of CITIES) {
       const p = geom.projection([c.lng as number, c.lat as number]);
       if (p && Number.isFinite(p[0]) && Number.isFinite(p[1])) {
-        out.push({ x: p[0], y: p[1], id: c.id, name: c.name, major: c.major });
+        out.push({ x: p[0], y: p[1], id: c.id, name: c.name, state: c.state, major: c.major });
       }
     }
     return out;
@@ -365,6 +372,7 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
                 className="cursor-pointer transition-[fill] duration-150"
                 onMouseEnter={(e) => {
                   setHovered(code);
+                  setHoveredCity(null);
                   if (total <= 0) {
                     // nothing to preview — the compact tip says "open for claiming"
                     keepOwnerCard();
@@ -490,10 +498,17 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
                   className="cursor-pointer"
                   onPointerOver={(e) => {
                     if (cityLeaveTimer.current) window.clearTimeout(cityLeaveTimer.current);
-                    // a pin sits inside its state: drop the state's own card
+                    // a pin sits inside its state: drop the state's own card/tip
                     keepOwnerCard();
                     setOwnerHover(null);
-                    if (!held) return;
+                    if (!held) {
+                      // nothing staked here yet → the same compact tip an open
+                      // state shows (name, its state, "open for claiming")
+                      setCityHover(null);
+                      setHoveredCity({ id: c.id, name: c.name, state: c.state });
+                      return;
+                    }
+                    setHoveredCity(null);
                     const b = e.currentTarget.getBoundingClientRect();
                     setCityHover({
                       id: c.id,
@@ -503,11 +518,16 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
                   }}
                   onPointerOut={() => {
                     if (cityLeaveTimer.current) window.clearTimeout(cityLeaveTimer.current);
-                    cityLeaveTimer.current = window.setTimeout(() => setCityHover(null), 140);
+                    cityLeaveTimer.current = window.setTimeout(() => {
+                      setCityHover(null);
+                      setHoveredCity(null);
+                    }, 140);
                   }}
                   onClick={() => {
                     if (dragging || !onOpenCity) return;
                     setCityHover(null);
+                    setHoveredCity(null);
+                    // the same thing a city row in the Cities panel does
                     onOpenCity(c.id);
                   }}
                 />
@@ -567,6 +587,21 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
           isEmpty={!totals[hovered]}
           owner={totals[hovered] ? topHolder(hovered) : null}
           cityStakes={citiesInState(hovered)}
+        />
+      )}
+
+      {/* city pin tip — an open (orange) pin gets the same compact tip an open
+          state gets; a pin that is already staked shows the owner card instead. */}
+      {hoveredCity && mouse && !dragging && (
+        <HoverTip
+          x={mouse.x}
+          y={mouse.y}
+          name={hoveredCity.name}
+          sub={stateCodeToName(hoveredCity.state)}
+          total={0}
+          isEmpty
+          owner={null}
+          cityStakes={[]}
         />
       )}
 
@@ -659,6 +694,7 @@ function HoverTip({
   x,
   y,
   name,
+  sub,
   total,
   isEmpty,
   owner,
@@ -667,6 +703,8 @@ function HoverTip({
   x: number;
   y: number;
   name: string;
+  /** the parent state, shown under the name (city pins) */
+  sub?: string;
   total: number;
   isEmpty: boolean;
   owner: { orgName: string; pitch: string; link?: string } | null;
@@ -680,6 +718,7 @@ function HoverTip({
       style={{ left, top: y }}
     >
       <div className="font-bold text-[#1f2b3e]">{name}</div>
+      {sub && <div className="mt-0.5 text-[11px] font-semibold text-[#8494ab]">{sub}</div>}
       {owner && (
         <div className="mt-0.5 font-extrabold text-[#166d4a]">
           {owner.orgName}
