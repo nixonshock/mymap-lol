@@ -371,8 +371,19 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
                 d={d}
                 fillRule="evenodd"
                 fill={stateFill(code, total, maxTotal)}
-                stroke={isSel ? "#1f2b3e" : isHover ? "#7aa0c8" : "#a8b8c8"}
-                strokeWidth={isSel ? 1.8 : isHover ? 1.3 : 1}
+                /*
+                 * State borders. A 1px stroke is drawn in viewBox units, and the
+                 * 1000-wide viewBox is fitted into an 816px box, so it landed at
+                 * 0.82 device px — a partly covered pixel that read as barely
+                 * there (Jerry: the map outline should be "visible / more
+                 * obvious — perhaps a grey"). 1.4px gives full pixel coverage and
+                 * #93a6bb is two shades darker than the old #a8b8c8, so the
+                 * divisions read at a glance and the coastline is darker than the
+                 * sea behind it (it used to be lighter, which hid it). The hover
+                 * blue stays the brighter cue; selected ink stays the loudest.
+                 */
+                stroke={isSel ? "#1f2b3e" : isHover ? "#7aa0c8" : "#93a6bb"}
+                strokeWidth={isSel ? 1.8 : isHover ? 1.6 : 1.4}
                 className="cursor-pointer transition-[fill] duration-150"
                 onMouseEnter={(e) => {
                   setHovered(code);
