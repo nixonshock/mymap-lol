@@ -104,6 +104,10 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
   } | null>(null);
   const movedRef = useRef(false);
   const downCodeRef = useRef<string | null>(null);
+  /** city id under the pointer when the press started (same trick the states
+   *  use: setPointerCapture retargets the follow-up `click` to the <svg>, so a
+   *  pin's own onClick never fires — resolve the target at pointerdown). */
+  const downCityRef = useRef<string | null>(null);
   const downHrefRef = useRef<string | null>(null);
 
   const totals = useMemo(() => allTotals(), [version]);
@@ -208,6 +212,7 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const code = (e.target as Element | null)?.getAttribute?.("data-code") ?? null;
     downCodeRef.current = code;
+    downCityRef.current = (e.target as Element | null)?.getAttribute?.("data-city") ?? null;
     downHrefRef.current = hrefFrom(e.target);
 
     if (pointers.current.size === 1) {
@@ -266,11 +271,15 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
     // the tap landed on a claimed state's owner label, follow that org's link.
     const wasTap = !movedRef.current;
     const code = downCodeRef.current;
+    const city = downCityRef.current;
     const href = downHrefRef.current;
     const isSingle = pointers.current.size === 1;
 
     pointers.current.delete(e.pointerId);
-    if (wasTap) downHrefRef.current = null;
+    if (wasTap) {
+      downHrefRef.current = null;
+      downCityRef.current = null;
+    }
 
     if (pointers.current.size === 0) {
       setDragging(false);
@@ -290,6 +299,14 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
       // click surface (see /api/click)
       trackClick({ link: href, source: "map" });
       window.open(href, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (wasTap && isSingle && city) {
+      // a tap on a city dot does exactly what clicking that city's row in the
+      // Cities panel does — same handler, so the two can never drift apart.
+      setCityHover(null);
+      setHoveredCity(null);
+      onOpenCity?.(city);
       return;
     }
     if (wasTap && isSingle && code) onSelect(code);
@@ -530,6 +547,7 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
                   cy={c.y}
                   r={Math.max(9, r * 2.4)}
                   fill="transparent"
+                  data-city={c.id}
                   className="cursor-pointer"
                   onPointerOver={(e) => {
                     if (cityLeaveTimer.current) window.clearTimeout(cityLeaveTimer.current);
@@ -559,6 +577,9 @@ export default function MalaysiaMap({ selectedCode, onSelect, selectedCityId, on
                     }, 140);
                   }}
                   onClick={() => {
+                    // Fallback only: setPointerCapture normally retargets the
+                    // click to the <svg>, so the tap is handled in onPointerUp
+                    // (see downCityRef). Kept so a capture failure still opens.
                     if (dragging || !onOpenCity) return;
                     setCityHover(null);
                     setHoveredCity(null);
